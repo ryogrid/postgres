@@ -1,0 +1,40 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+EXEC SQL WHENEVER SQLERROR CALL die();
+EXEC SQL WHENEVER NOT FOUND DO BREAK;
+
+void
+die(void)
+{
+    fprintf(stderr, "%s\n", sqlca.sqlerrm.sqlerrmc);
+    exit(1);
+}
+
+int
+main(void)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    const char *target = "postgres@localhost:5432";
+    const char *user = "ryo";
+    const char *passwd = "";
+    //char dbname[64];
+    EXEC SQL END DECLARE SECTION;
+
+    EXEC SQL CONNECT TO :target USER :user USING :passwd;
+    EXEC SQL COPY name_age_list TO STDOUT;
+/*    
+    EXEC SQL DECLARE cur CURSOR FOR SELECT datname FROM pg_database;
+    EXEC SQL OPEN cur;
+    while (1)
+    {
+        EXEC SQL FETCH cur INTO :dbname;
+        printf("%s\n", dbname);
+    }
+    EXEC SQL CLOSE cur;
+    EXEC SQL COMMIT;
+*/
+    EXEC SQL DISCONNECT ALL;
+
+    return 0;
+}
