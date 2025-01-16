@@ -1,0 +1,39 @@
+/* Test ECPG notice/warning/error messages */
+
+#include <stdlib.h>
+
+EXEC SQL WHENEVER SQLERROR STOP;
+
+int
+main(void)
+{
+    EXEC SQL BEGIN DECLARE SECTION;
+    char *stmt = "SELECT * FROM test";
+    char *cursor_var = "mycursor";
+    EXEC SQL END DECLARE SECTION;
+
+    /* Test AT option errors */
+    EXEC SQL AT connection1 CONNECT TO testdb;
+    EXEC SQL AT connection1 DISCONNECT;
+    EXEC SQL AT connection1 SET CONNECTION TO testdb;
+
+    /* Test COPY FROM STDIN warning */
+    EXEC SQL COPY test FROM stdin;
+    
+    /* Test duplicate cursor declarations */
+    EXEC SQL DECLARE :cursor_var CURSOR FOR SELECT * FROM test;
+    EXEC SQL DECLARE :cursor_var CURSOR FOR SELECT * FROM test;
+    
+    EXEC SQL DECLARE duplicate_cursor CURSOR FOR SELECT * FROM test;
+    EXEC SQL DECLARE duplicate_cursor CURSOR FOR SELECT * FROM test;
+
+    /* Test SHOW ALL error */
+    EXEC SQL SHOW ALL;
+
+    EXEC SQL AT connection1 WHENEVER NOT FOUND CONTINUE;     
+
+    /* Test deprecated LIMIT syntax warning */
+    EXEC SQL SELECT * FROM test LIMIT 10, 5;
+
+    return 0;
+}
