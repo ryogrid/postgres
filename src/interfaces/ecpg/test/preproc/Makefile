@@ -16,7 +16,8 @@ TESTS = array_of_struct array_of_struct.c \
 	variable variable.c \
 	whenever whenever.c \
 	whenever_do_continue whenever_do_continue.c \
-	pointer_to_struct pointer_to_struct.c
+	pointer_to_struct pointer_to_struct.c \
+	cmd_out_informix cmd_out_informix.c
 
 all: $(TESTS)
 
