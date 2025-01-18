@@ -21,6 +21,8 @@
 
 #define BINARY_PATH "../preproc/ecpg"
 //#define BINARY_PATH "/usr/bin/pwd"
+#define EXEC_MODE_OPTION1 "-C"
+#define EXEC_MODE_OPTION2 "INFORMIX"
 #define PGC_FILE_NAME "preproc/notice_informix.pgc"
 
 int main(void) {
@@ -55,7 +57,7 @@ int main(void) {
         close(pipe_stderr[1]);
 
         // Execute the binary with the hardcoded argument
-        execl(BINARY_PATH, BINARY_PATH, PGC_FILE_NAME, (char *)NULL);
+        execl(BINARY_PATH, BINARY_PATH, EXEC_MODE_OPTION1, EXEC_MODE_OPTION2, PGC_FILE_NAME, (char *)NULL);
 		//execl(BINARY_PATH, BINARY_PATH, (char *)NULL);
 
         // This code is only executed if execl fails
@@ -98,7 +100,7 @@ int main(void) {
             close(pipe_stdout[0]);
             close(pipe_stderr[0]);
 
-            return exit_code;
+            return 0;
         } else if (WIFSIGNALED(status)) {
             fprintf(stderr, "Child process was terminated by signal %d\n", WTERMSIG(status));
         } else {
