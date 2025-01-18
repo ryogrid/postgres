@@ -19,7 +19,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-#define BINARY_PATH "preproc/ecpg"
+#define BINARY_PATH "../preproc/ecpg"
+//#define BINARY_PATH "/usr/bin/pwd"
 #define PGC_FILE_NAME "preproc/notice_informix.pgc"
 
 int main(void) {
@@ -55,6 +56,7 @@ int main(void) {
 
         // Execute the binary with the hardcoded argument
         execl(BINARY_PATH, BINARY_PATH, PGC_FILE_NAME, (char *)NULL);
+		//execl(BINARY_PATH, BINARY_PATH, (char *)NULL);
 
         // This code is only executed if execl fails
         fprintf(stderr, "Failed to execute binary: %s\n", BINARY_PATH);
