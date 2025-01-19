@@ -32,18 +32,24 @@ autoprep.c: autoprep.pgc $(ECPG_TEST_DEPENDENCIES)
 strings.c: strings.pgc strings.h $(ECPG_TEST_DEPENDENCIES)
 	$(ECPG) -i -o $@ $<
 
+##########################################################################
+#
+# for testing syntax error detection of ecpg command
+
 cmd_out_util.o: cmd_out_util.c
 	$(CC) -c $<
 
+# cmd_out.c is not generated material
 cmd_out.o: cmd_out.c
 	$(CC) -c $<
 	rm -f ../expected/preproc-cmd_out.c
 	cp cmd_out.c ../expected/preproc-cmd_out.c
 
+# cmd_out_informix.c is not generated material
 cmd_out_informix.o: cmd_out_informix.c
 	$(CC) -c $<
 	rm -f ../expected/preproc-cmd_out_informix.c
-	cp cmd_out_informix.c ../expected/preproc-cmd_out_infor_mix.c
+	cp cmd_out_informix.c ../expected/preproc-cmd_out_informix.c
 
 cmd_out: cmd_out.o cmd_out_util.o
 	$(CC) -o $@ $^
