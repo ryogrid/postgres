@@ -23,5 +23,5 @@
 #define PGC_FILE_NAME "preproc/notice_informix.pgc"
 
 int main(void) {
-	exec_ecpg(EXEC_MODE_OPTION1, EXEC_MODE_OPTION2, PGC_FILE_NAME, (char *)NULL);
+	return exec_ecpg(EXEC_MODE_OPTION1, EXEC_MODE_OPTION2, PGC_FILE_NAME, (char *)NULL);
 }

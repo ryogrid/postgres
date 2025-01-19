@@ -32,6 +32,7 @@ test: preproc/outofscope
 test: preproc/whenever
 test: preproc/whenever_do_continue
 test: preproc/cmd_out_informix
+test: preproc/cmd_out
 test: sql/array
 test: sql/binary
 test: sql/bytea

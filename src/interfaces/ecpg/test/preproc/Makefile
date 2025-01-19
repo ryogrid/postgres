@@ -18,7 +18,7 @@ TESTS = array_of_struct array_of_struct.c \
 	whenever_do_continue whenever_do_continue.c \
 	pointer_to_struct pointer_to_struct.c
 
-all: $(TESTS) cmd_out_informix
+all: $(TESTS) cmd_out cmd_out_informix
 
 array_of_struct.c: array_of_struct.pgc $(ECPG_TEST_DEPENDENCIES)
 	$(ECPG) -c -o $@ $<
@@ -32,11 +32,21 @@ autoprep.c: autoprep.pgc $(ECPG_TEST_DEPENDENCIES)
 strings.c: strings.pgc strings.h $(ECPG_TEST_DEPENDENCIES)
 	$(ECPG) -i -o $@ $<
 
-cmd_out_informix.o: cmd_out_informix.c
-	$(CC) -c $<
-
 cmd_out_util.o: cmd_out_util.c
 	$(CC) -c $<
+
+cmd_out.o: cmd_out.c
+	$(CC) -c $<
+	rm -f ../expected/preproc-cmd_out.c
+	cp cmd_out.c ../expected/preproc-cmd_out.c
+
+cmd_out_informix.o: cmd_out_informix.c
+	$(CC) -c $<
+	rm -f ../expected/preproc-cmd_out_informix.c
+	cp cmd_out_informix.c ../expected/preproc-cmd_out_infor_mix.c
+
+cmd_out: cmd_out.o cmd_out_util.o
+	$(CC) -o $@ $^
 
 cmd_out_informix: cmd_out_informix.o cmd_out_util.o
 	$(CC) -o $@ $^

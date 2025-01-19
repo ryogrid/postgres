@@ -89,7 +89,7 @@ int exec_ecpg(const char *first, ...) {
 
         // This code is only executed if execl fails
         fprintf(stderr, "Failed to execute binary: %s\n", BINARY_PATH);
-        
+        exit(2);
     } else {
         // In the parent process
 
