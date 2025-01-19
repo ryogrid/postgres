@@ -39,6 +39,19 @@ foreach pgc_file : pgc_files
 endforeach
 
 
+
+cmd_out_src = custom_target(
+  'cmd_out_src',
+  command: 
+  [
+    'cat',
+    'cmd_out.c',
+    '>',
+    'preproc-cmd_out.c'
+  ],
+  output: 'preproc-cmd_out.c'
+)
+
 cmd_out_exe = executable(
   'cmd_out',
   [
@@ -52,6 +65,18 @@ cmd_out_exe = executable(
   build_by_default: false,
   install: false,
 )
+
+cmd_out_informax_src = custom_target(
+  'cmd_out_informax_src',
+  command: 
+  [
+    'cat',
+    'cmd_out_inrormax.c',
+    '>',
+    'preproc-cmd_out_informax.c'
+  ],
+  output: 'preproc-cmd_out_informax.c'
+  )
 
 cmd_out_informix_exe = executable(
   'cmd_out_informix',
@@ -67,67 +92,70 @@ cmd_out_informix_exe = executable(
   install: false,
 )
 
-cmd_out_clean = custom_target(
-  'clean_cmd_out_c',
-  output: 'preproc-cmd_out_dummy.c',
-  command: [
-    'rm',
-    '-f',
-    join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out.c'),
-  ],
-  build_by_default: false,
-  depend_files: ['cmd_out.c'],
-  depends: cmd_out_exe,
-  install: false,
-)
 
-cmd_out_copy = custom_target(
-  'copy_cmd_out_c',
-  input: 'cmd_out.c',
-  output: 'preproc-cmd_out.c',
-  command: [
-    'cp',
-    '@INPUT@',
-    join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out.c'),
-  ],
-  build_by_default: false,
-  depend_files: ['cmd_out.c'],
-  depends: cmd_out_clean,
-  install: false,
-)
+# cmd_out_clean = custom_target(
+#   'clean_cmd_out_c',
+#   output: 'preproc-cmd_out_dummy.c',
+#   command: [
+#     'rm',
+#     '-f',
+#     join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out.c'),
+#   ],
+#   build_by_default: false,
+#   depend_files: ['cmd_out.c'],
+#   depends: cmd_out_exe,
+#   install: false,
+# )
 
-cmd_out_informix_clean = custom_target(
-  'clean_cmd_out_informix_c',
-  output: 'preproc-cmd_out_informix_dummy.c',
-  command: [
-    'rm',
-    '-f',
-    join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out_informix.c'),
-  ],
-  build_by_default: false,
-  depends: cmd_out_informix_exe,
-  install: false,
-)
+# cmd_out_copy = custom_target(
+#   'copy_cmd_out_c',
+#   input: 'cmd_out.c',
+#   output: 'preproc-cmd_out.c',
+#   command: [
+#     'cp',
+#     '@INPUT@',
+#     join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out.c'),
+#   ],
+#   build_by_default: false,
+#   depend_files: ['cmd_out.c'],
+#   depends: cmd_out_clean,
+#   install: false,
+# )
 
-cmd_out_informix_copy = custom_target(
-  'copy_cmd_out_informix_c',
-  input: 'cmd_out_informix.c',
-  output: 'preproc-cmd_out_informix.c',
-  command: [
-    'cp',
-    '@INPUT@',
-    join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out_informix.c'),
-  ],
-  build_by_default: false,
-  depends: cmd_out_informix_clean,
-  install: false,
-)
+# cmd_out_informix_clean = custom_target(
+#   'clean_cmd_out_informix_c',
+#   output: 'preproc-cmd_out_informix_dummy.c',
+#   command: [
+#     'rm',
+#     '-f',
+#     join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out_informix.c'),
+#   ],
+#   build_by_default: false,
+#   depends: cmd_out_informix_exe,
+#   install: false,
+# )
+
+# cmd_out_informix_copy = custom_target(
+#   'copy_cmd_out_informix_c',
+#   input: 'cmd_out_informix.c',
+#   output: 'preproc-cmd_out_informix.c',
+#   command: [
+#     'cp',
+#     '@INPUT@',
+#     join_paths(meson.current_source_dir(), '..', 'expected', 'preproc-cmd_out_informix.c'),
+#   ],
+#   build_by_default: false,
+#   depends: cmd_out_informix_clean,
+#   install: false,
+# )
 
 ecpg_test_dependencies += [
+  cmd_out_src,
   cmd_out_exe,
-  cmd_out_clean,
-  cmd_out_copy,
+  #cmd_out_clean,
+  #cmd_out_copy,
+  cmd_out_informax_src,
   cmd_out_informix_exe,
-  cmd_out_informix_clean,
-  cmd_out_informix_copy,
+  #cmd_out_informix_clean,
+  #cmd_out_informix_copy,
 ]
