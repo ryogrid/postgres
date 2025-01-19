@@ -13,14 +13,11 @@
  *-------------------------------------------------------------------------
  */
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <fcntl.h>
 #include "cmd_out_util.h"
 
-#define BINARY_PATH "../preproc/ecpg"
+// binary path is "../preproc/ecpg"
+
 #define EXEC_MODE_OPTION1 "-C"
 #define EXEC_MODE_OPTION2 "INFORMIX"
 #define PGC_FILE_NAME "preproc/notice_informix.pgc"
