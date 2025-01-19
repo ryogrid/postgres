@@ -94,7 +94,7 @@ cmd_out_copy = custom_target(
   ],
   build_by_default: false,
   depend_files: ['cmd_out.c'],
-  depends: cmd_out_exe,
+  depends: [cmd_out_exe, cmd_out_clean],
   install: false,
 )
 
