@@ -32,5 +32,11 @@ autoprep.c: autoprep.pgc $(ECPG_TEST_DEPENDENCIES)
 strings.c: strings.pgc strings.h $(ECPG_TEST_DEPENDENCIES)
 	$(ECPG) -i -o $@ $<
 
-cmd_out_informix: cmd_out_informix.c
-	$(CC) -o $@ $<
+cmd_out_informix.o: cmd_out_informix.c
+	$(CC) -c $<
+
+cmd_out_util.o: cmd_out_util.c
+	$(CC) -c $<
+
+cmd_out_informix: cmd_out_informix.o cmd_out_util.o
+	$(CC) -o $@ $^
