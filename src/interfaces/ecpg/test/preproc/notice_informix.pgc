@@ -8,7 +8,10 @@ int
 main(void)
 {
     /* Test cursor name errors in INFORMIX mode */
-    EXEC SQL DECLARE database CURSOR FOR SELECT * FROM test;    
+    EXEC SQL DECLARE database CURSOR FOR SELECT * FROM test;
+
+    /* Test AT option usage at CLOSE statement in INFORMIX mode */
+    EXEC SQL AT connection1 CLOSE database;
 
     return 0;
 }
