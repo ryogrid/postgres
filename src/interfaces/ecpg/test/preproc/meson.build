@@ -46,6 +46,19 @@ endforeach
 #   install: false,
 # )
 
+copy = find_program('copy.py')
+
+run_command(
+copy, 
+'cmd_out.c', 
+'cmd_out.c'
+)
+
+run_command(
+copy,
+'cmd_out_informix.c', 
+'cmd_out_informix.c'
+)
 
 # cmd_out executable
 cmd_out_exe = executable('cmd_out',
