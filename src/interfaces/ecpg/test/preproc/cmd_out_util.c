@@ -20,8 +20,6 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
-#define BINARY_PATH "../preproc/ecpg"
-
 // Function to take variable-length arguments and execute the appropriate function based on the number of arguments
 int exec_ecpg(const char *first, ...) {
     va_list args;

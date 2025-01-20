@@ -16,10 +16,6 @@
 #include <stdlib.h>
 #include "cmd_out_util.h"
 
-// binary path is "../preproc/ecpg"
-
-#define PGC_FILE_NAME "preproc/notice.pgc"
-
 int main(void) {
 	return exec_ecpg(PGC_FILE_NAME, (char *)NULL);
 }
