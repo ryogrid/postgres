@@ -42,14 +42,10 @@ cmd_out_util.o: cmd_out_util.c
 # cmd_out.c is not generated material
 cmd_out.o: cmd_out.c
 	$(CC) -D'PGC_FILE_NAME="preproc/notice.pgc"' -c $<
-	rm -f ../expected/preproc-cmd_out.c
-	cp cmd_out.c ../expected/preproc-cmd_out.c
 
 # cmd_out_informix.c is not generated material
 cmd_out_informix.o: cmd_out_informix.c
 	$(CC) -D'PGC_FILE_NAME="preproc/notice_informix.pgc"' -c $<
-	rm -f ../expected/preproc-cmd_out_informix.c
-	cp cmd_out_informix.c ../expected/preproc-cmd_out_informix.c
 
 cmd_out: cmd_out.o cmd_out_util.o
 	$(CC) -o $@ $^
