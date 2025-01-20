@@ -46,10 +46,11 @@ endforeach
 #   install: false,
 # )
 
+
 # cmd_out executable
 cmd_out_exe = executable('cmd_out',
   ['cmd_out.c', 'cmd_out_util.c'],
-  c_args: cflags_no_missing_var_decls,
+  c_args: ['-DBINARY_PATH="../preproc/ecpg"', '-DPGC_FILE_NAME="../preproc/notice.pgc"'],
   build_by_default: false,
   install: false,
 )
@@ -57,7 +58,7 @@ cmd_out_exe = executable('cmd_out',
 # cmd_out_informix executable
 cmd_out_informix_exe = executable('cmd_out_informix',
   ['cmd_out_informix.c', 'cmd_out_util.c'],
-  c_args: cflags_no_missing_var_decls,
+  c_args: ['-DBINARY_PATH="../preproc/ecpg"', '-DPGC_FILE_NAME="../preproc/notice_informix.pgc"'],
   build_by_default: false,
   install: false,
 )
