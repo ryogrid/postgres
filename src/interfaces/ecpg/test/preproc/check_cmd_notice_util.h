@@ -1,0 +1,1 @@
+extern int exec_ecpg(const char *first, ...);

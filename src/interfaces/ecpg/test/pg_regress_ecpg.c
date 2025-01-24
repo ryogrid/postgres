@@ -22,6 +22,7 @@
 #include "lib/stringinfo.h"
 #include "pg_regress.h"
 
+#define NO_SOURCE_CHECK_TEST_PREFIX "preproc/check_cmd_notice"
 
 /*
  * Create a filtered copy of sourcefile, removing any path
@@ -162,6 +163,7 @@ ecpg_start_test(const char *testname,
 				expectfile_source[MAXPGPATH];
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
+	char 		is_no_source_check = 0;
 
 	snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
 	snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
@@ -175,15 +177,24 @@ ecpg_start_test(const char *testname,
 			*c = '-';
 	}
 
+	/* check for NO_SOURCE_CHECK_TEST_PRFIX literal in the beginning */
+	if (strstr(testname, NO_SOURCE_CHECK_TEST_PREFIX) == testname)
+	{
+		is_no_source_check = 1;
+	}
+
 	snprintf(expectfile_stdout, sizeof(expectfile_stdout),
 			 "%s/expected/%s.stdout",
 			 expecteddir, testname_dash.data);
 	snprintf(expectfile_stderr, sizeof(expectfile_stderr),
 			 "%s/expected/%s.stderr",
 			 expecteddir, testname_dash.data);
-	snprintf(expectfile_source, sizeof(expectfile_source),
-			 "%s/expected/%s.c",
-			 expecteddir, testname_dash.data);
+	if (is_no_source_check == 0)
+	{
+		snprintf(expectfile_source, sizeof(expectfile_source),
+				"%s/expected/%s.c",
+				expecteddir, testname_dash.data);
+	}
 
 	snprintf(outfile_stdout, sizeof(outfile_stdout),
 			 "%s/results/%s.stdout",
@@ -191,9 +202,12 @@ ecpg_start_test(const char *testname,
 	snprintf(outfile_stderr, sizeof(outfile_stderr),
 			 "%s/results/%s.stderr",
 			 outputdir, testname_dash.data);
-	snprintf(outfile_source, sizeof(outfile_source),
-			 "%s/results/%s.c",
-			 outputdir, testname_dash.data);
+	if (is_no_source_check == 0)
+	{	 
+		snprintf(outfile_source, sizeof(outfile_source),
+				"%s/results/%s.c",
+				outputdir, testname_dash.data);
+	}
 
 	add_stringlist_item(resultfiles, outfile_stdout);
 	add_stringlist_item(expectfiles, expectfile_stdout);
@@ -203,11 +217,14 @@ ecpg_start_test(const char *testname,
 	add_stringlist_item(expectfiles, expectfile_stderr);
 	add_stringlist_item(tags, "stderr");
 
-	add_stringlist_item(resultfiles, outfile_source);
-	add_stringlist_item(expectfiles, expectfile_source);
-	add_stringlist_item(tags, "source");
+	if (is_no_source_check == 0)
+	{	
+		add_stringlist_item(resultfiles, outfile_source);
+		add_stringlist_item(expectfiles, expectfile_source);
+		add_stringlist_item(tags, "source");		
 
-	ecpg_filter_source(insource, outfile_source);
+		ecpg_filter_source(insource, outfile_source);
+	}
 
 	snprintf(cmd, sizeof(cmd),
 			 "\"%s\" >\"%s\" 2>\"%s\"",
