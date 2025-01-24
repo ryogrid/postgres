@@ -38,46 +38,22 @@ foreach pgc_file : pgc_files
   )
 endforeach
 
-# For testing syntax error detection of ecpg command
-# cmd_out_util = executable('cmd_out_util',
-#   'cmd_out_util.c',
-#   c_args: cflags_no_missing_var_decls,
-#   build_by_default: false,
-#   install: false,
-# )
-
-copy = find_program('copy.py')
-
-run_command(
-copy, 
-'cmd_out.c', 
-'cmd_out.c'
-)
-
-run_command(
-copy,
-'cmd_out_informix.c', 
-'cmd_out_informix.c'
-)
-
-# cmd_out executable
-cmd_out_exe = executable('cmd_out',
-  ['cmd_out.c', 'cmd_out_util.c'],
-  c_args: ['-DBINARY_PATH="../preproc/ecpg"', '-DPGC_FILE_NAME="../preproc/notice.pgc"'],
+check_cmd_notice_exe = executable('check_cmd_notice',
+  ['check_cmd_notice.c', 'check_cmd_notice_util.c'],
+  c_args: ['-DBINARY_PATH="@0@/../../preproc/ecpg"'.format(meson.current_build_dir()), '-DPGC_FILE_NAME="@0@/notice.pgc"'.format(meson.current_source_dir())],
   build_by_default: false,
   install: false,
 )
 
-# cmd_out_informix executable
-cmd_out_informix_exe = executable('cmd_out_informix',
-  ['cmd_out_informix.c', 'cmd_out_util.c'],
-  c_args: ['-DBINARY_PATH="../preproc/ecpg"', '-DPGC_FILE_NAME="../preproc/notice_informix.pgc"'],
+check_cmd_notice_informix_exe = executable('check_cmd_notice_informix',
+  ['check_cmd_notice_informix.c', 'check_cmd_notice_util.c'],
+  c_args: ['-DBINARY_PATH="@0@/../../preproc/ecpg"'.format(meson.current_build_dir()), '-DPGC_FILE_NAME="@0@/notice_informix.pgc"'.format(meson.current_source_dir())],
   build_by_default: false,
   install: false,
 )
 
 # Update test dependencies
 ecpg_test_dependencies += [
-  cmd_out_exe,
-  cmd_out_informix_exe,
+  check_cmd_notice_exe,
+  check_cmd_notice_informix_exe,
 ]
