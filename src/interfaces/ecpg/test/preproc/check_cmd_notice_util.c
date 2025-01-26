@@ -5,6 +5,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 
+#include "pg_regress.h"
+
 /* 
    Function to take variable-length arguments and execute the appropriate function based on
    the number of arguments
@@ -12,8 +14,8 @@
 int exec_ecpg(const char *first, ...) {
     va_list args;
     /* To store arguments, including the NULL sentinel */
-    const char *args_array[5] = {0}; 
-    pid_t pid;
+    const char *args_array[5] = {0};
+    PID_TYPE pid;
     int status;
     int pipe_stdout[2], pipe_stderr[2];
     int arg_num;
@@ -97,7 +99,7 @@ int exec_ecpg(const char *first, ...) {
 
             /* Read and output stdout from the child process */
             char buffer[1024];
-            ssize_t bytes_read;
+            int bytes_read;
 
             while ((bytes_read = read(pipe_stdout[0], buffer, sizeof(buffer) - 1)) > 0) {
                 buffer[bytes_read] = '\0';

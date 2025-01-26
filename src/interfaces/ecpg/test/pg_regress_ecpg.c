@@ -24,6 +24,7 @@
 
 #define NO_SOURCE_CHECK_TEST_PREFIX "preproc/check_cmd_notice"
 
+
 /*
  * Create a filtered copy of sourcefile, removing any path
  * appearing in #line directives; for example, replace
