@@ -161,10 +161,15 @@ ecpg_start_test(const char *testname,
 	char		outfile_stderr[MAXPGPATH],
 				expectfile_stderr[MAXPGPATH];
 	char		outfile_source[MAXPGPATH],
-				expectfile_source[MAXPGPATH];
+				expectfile_source[MAXPGPATH];	
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
-	char 		is_no_source_check = 0;
+	bool 		is_no_source_check = false;
+	StringInfoData testname_dash2;
+	/* Assuming a maximum of 10 split parts */
+	char       *split_testnames[10];
+	int			split_count = 0;
+	char		*token;
 
 	snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
 	snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
@@ -181,8 +186,21 @@ ecpg_start_test(const char *testname,
 	/* check for NO_SOURCE_CHECK_TEST_PRFIX literal in the beginning */
 	if (strstr(testname, NO_SOURCE_CHECK_TEST_PREFIX) == testname)
 	{
-		is_no_source_check = 1;
+		is_no_source_check = true;
 	}
+
+    /* Split testname by "#" if it contains "#" */
+    if (strstr(testname, "#") != NULL)
+    {
+		initStringInfo(&testname_dash2);
+		appendStringInfoString(&testname_dash2, testname);
+        token = strtok(testname_dash2.data, "#");
+        while (token != NULL && split_count < 10)
+        {
+            split_testnames[split_count++] = token;
+            token = strtok(NULL, "#");
+        }
+    }
 
 	snprintf(expectfile_stdout, sizeof(expectfile_stdout),
 			 "%s/expected/%s.stdout",
@@ -190,7 +208,7 @@ ecpg_start_test(const char *testname,
 	snprintf(expectfile_stderr, sizeof(expectfile_stderr),
 			 "%s/expected/%s.stderr",
 			 expecteddir, testname_dash.data);
-	if (is_no_source_check == 0)
+	if (!is_no_source_check)
 	{
 		snprintf(expectfile_source, sizeof(expectfile_source),
 				"%s/expected/%s.c",
@@ -203,7 +221,7 @@ ecpg_start_test(const char *testname,
 	snprintf(outfile_stderr, sizeof(outfile_stderr),
 			 "%s/results/%s.stderr",
 			 outputdir, testname_dash.data);
-	if (is_no_source_check == 0)
+	if (!is_no_source_check)
 	{	 
 		snprintf(outfile_source, sizeof(outfile_source),
 				"%s/results/%s.c",
@@ -218,7 +236,7 @@ ecpg_start_test(const char *testname,
 	add_stringlist_item(expectfiles, expectfile_stderr);
 	add_stringlist_item(tags, "stderr");
 
-	if (is_no_source_check == 0)
+	if (!is_no_source_check)
 	{	
 		add_stringlist_item(resultfiles, outfile_source);
 		add_stringlist_item(expectfiles, expectfile_source);

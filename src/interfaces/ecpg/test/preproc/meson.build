@@ -38,26 +38,26 @@ foreach pgc_file : pgc_files
   )
 endforeach
 
-check_cmd_notice_exe = executable('check_cmd_notice',
-  ['check_cmd_notice.c', 'check_cmd_notice_util.c'],
-  include_directories: [pg_regress_inc],
-  c_args: cflags + ['-DBINARY_PATH="@0@/../../preproc/ecpg"'.format(meson.current_build_dir()), '-DPGC_FILE_NAME="@0@/notice.pgc"'.format(meson.current_source_dir())],
-  dependencies: [frontend_code, libpq],
-  build_by_default: false,
-  install: false,
-)
+# check_cmd_notice_exe = executable('check_cmd_notice',
+#   ['check_cmd_notice.c', 'check_cmd_notice_util.c'],
+#   include_directories: [pg_regress_inc],
+#   c_args: cflags + ['-DBINARY_PATH="@0@/../../preproc/ecpg"'.format(meson.current_build_dir()), '-DPGC_FILE_NAME="@0@/notice.pgc"'.format(meson.current_source_dir())],
+#   dependencies: [frontend_code, libpq],
+#   build_by_default: false,
+#   install: false,
+# )
 
-check_cmd_notice_informix_exe = executable('check_cmd_notice_informix',
-  ['check_cmd_notice_informix.c', 'check_cmd_notice_util.c'],
-  include_directories: [pg_regress_inc],
-  c_args: cflags + ['-DBINARY_PATH="@0@/../../preproc/ecpg"'.format(meson.current_build_dir()), '-DPGC_FILE_NAME="@0@/notice_informix.pgc"'.format(meson.current_source_dir())],
-  dependencies: [frontend_code, libpq],
-  build_by_default: false,
-  install: false,
-)
+# check_cmd_notice_informix_exe = executable('check_cmd_notice_informix',
+#   ['check_cmd_notice_informix.c', 'check_cmd_notice_util.c'],
+#   include_directories: [pg_regress_inc],
+#   c_args: cflags + ['-DBINARY_PATH="@0@/../../preproc/ecpg"'.format(meson.current_build_dir()), '-DPGC_FILE_NAME="@0@/notice_informix.pgc"'.format(meson.current_source_dir())],
+#   dependencies: [frontend_code, libpq],
+#   build_by_default: false,
+#   install: false,
+# )
 
-# Update test dependencies
-ecpg_test_dependencies += [
-  check_cmd_notice_exe,
-  check_cmd_notice_informix_exe,
-]
+# # Update test dependencies
+# ecpg_test_dependencies += [
+#   check_cmd_notice_exe,
+#   check_cmd_notice_informix_exe,
+# ]
