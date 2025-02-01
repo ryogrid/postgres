@@ -1307,7 +1307,7 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 		{
 			args2[i] = args[i - 1];
 		}
-        execv(shellprog, (char *const *)args);
+        execv(shellprog, (char *const *)args2);
 
         /* Not using the normal bail() here as we want _exit */
         bail_noatexit("could not exec \"%s\": %m", shellprog);
