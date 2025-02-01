@@ -22,7 +22,7 @@
 #include "lib/stringinfo.h"
 #include "pg_regress.h"
 
-#define NO_SOURCE_CHECK_TEST_PREFIX "preproc/check_cmd_notice"
+#define NO_SOURCE_CHECK_TEST_PREFIX "../preproc/ecpg"
 
 
 /*

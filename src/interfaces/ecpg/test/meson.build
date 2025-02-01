@@ -80,6 +80,7 @@ tests += {
     'expecteddir': meson.current_source_dir(),
     'inputdir': meson.current_build_dir(),
     'schedule': ecpg_test_files,
+    'bindir': meson.current_build_dir() + '/../preproc/',
     'sql': [
       'sql/twophase',
     ],
