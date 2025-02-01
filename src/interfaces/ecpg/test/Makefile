@@ -39,13 +39,16 @@ clean distclean:
 	$(MAKE) -C compat_oracle $@
 	$(MAKE) -C thread $@
 	rm -rf tmp_check results log
-	rm -f pg_regress regression.diffs regression.out pg_regress_ecpg.o $(WIN32RES)
+	rm -f pg_regress regression.diffs regression.out pg_regress_ecpg.o ecpg $(WIN32RES)
 
 # Build regression test driver
 
 all: pg_regress$(X)
 
-pg_regress$(X): pg_regress_ecpg.o $(WIN32RES) $(top_builddir)/src/test/regress/pg_regress.o
+copy_ecpg: $(ECPG)
+	cp $(ECPG) ecpg
+	
+pg_regress$(X): pg_regress_ecpg.o $(WIN32RES) $(top_builddir)/src/test/regress/pg_regress.o copy_ecpg
 	$(CC) $(CFLAGS) $^ $(libpq_pgport) $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@
 
 $(top_builddir)/src/test/regress/pg_regress.o:

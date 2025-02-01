@@ -23,7 +23,12 @@
 #include "pg_regress.h"
 
 #define NO_SOURCE_CHECK_TEST_PREFIX "ecpg"
-#define ECPG_COMMAND_PATH "../preproc/"
+
+#ifdef WIN32
+#define ECPG_COMMAND_PATH ""
+#else
+#define ECPG_COMMAND_PATH "./"
+#endif
 
 
 /*
@@ -200,7 +205,6 @@ ecpg_start_test(const char *testname,
         while (token != NULL && split_count < 10)
         {
             split_testnames[split_count++] = token;
-			printf("%s\n", token);
             token = strtok(NULL, "#");
         }
     }
