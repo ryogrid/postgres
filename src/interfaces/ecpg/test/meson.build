@@ -84,7 +84,7 @@ configure_file(
     copy: true
 )
 
-expg_out = 'ecpg'
+ecpg_out = 'ecpg'
 if host_system == 'windows'
   ecpg_out = 'ecpg.exe'
 endif
