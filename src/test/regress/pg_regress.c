@@ -1277,6 +1277,7 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
     pid_t pid;
 	int i;
 	char *args2[11];
+	char cmdline[1024] = "";
 
 	/*
 	 * Must flush I/O buffers before fork.
@@ -1303,10 +1304,18 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 		 */
 		args2[0] = shellprog;
 		args2[1] = "-c";
-		for (i = 2; i < num_args + 2; i++) 
+		strcat(cmdline, "exec ");
+		for(i = 0; i < num_args; i++)
 		{
-			args2[i] = args[i - 2];
+			strcat(cmdline, args[i]);
+			strcat(cmdline, " ");
 		}
+		args2[2] = cmdline;
+		// for (i = 2; i < num_args + 2; i++) 
+		// {
+		// 	args2[i] = args[i - 2];
+		// }
+		args2[3] = NULL;
         execv(shellprog, (char *const *)args2);
 
         /* Not using the normal bail() here as we want _exit */
