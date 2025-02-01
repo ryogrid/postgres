@@ -45,9 +45,9 @@ clean distclean:
 
 all: pg_regress$(X)
 
-copy_ecpg: $(ECPG)
-	cp $(ECPG) ecpg
-	
+copy_ecpg:
+	cp ../preproc/ecpg ecpg
+
 pg_regress$(X): pg_regress_ecpg.o $(WIN32RES) $(top_builddir)/src/test/regress/pg_regress.o copy_ecpg
 	$(CC) $(CFLAGS) $^ $(libpq_pgport) $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@
 
