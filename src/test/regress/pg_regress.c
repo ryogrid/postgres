@@ -1276,7 +1276,7 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 #ifndef WIN32
     pid_t pid;
 	int i;
-	char *args2[12];
+	char *args2[11];
 
 	/*
 	 * Must flush I/O buffers before fork.
@@ -1303,9 +1303,9 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 		 */
 		args2[0] = shellprog;
 		args2[1] = "-c";
-		for (i = 1; i < num_args + 2; i++) 
+		for (i = 2; i < num_args + 2; i++) 
 		{
-			args2[i] = args[i - 1];
+			args2[i] = args[i - 2];
 		}
         execv(shellprog, (char *const *)args2);
 
