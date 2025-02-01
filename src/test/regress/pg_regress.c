@@ -1276,6 +1276,7 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 #ifndef WIN32
     pid_t pid;
 	int i;
+	char *args2[12];
 
 	/*
 	 * Must flush I/O buffers before fork.
@@ -1299,7 +1300,13 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 		 * Instead of using system(), exec the shell directly, and tell it to
 		 * "exec" the command too.  This saves two useless processes per
 		 * parallel test case.
-		 */		
+		 */
+		args2[0] = shellprog;
+		args2[1] = "-c";
+		for (i = 1; i < num_args + 2; i++) 
+		{
+			args2[i] = args[i - 1];
+		}
         execv(shellprog, (char *const *)args);
 
         /* Not using the normal bail() here as we want _exit */
