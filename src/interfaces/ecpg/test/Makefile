@@ -68,9 +68,6 @@ REGRESS_OPTS =  --expecteddir=$(srcdir) \
   --dbname=ecpg1_regression,ecpg2_regression --create-role=regress_ecpg_user1,regress_ecpg_user2 \
   $(EXTRA_REGRESS_OPTS)
 
-# for ebpg command
-bindir = ../../preproc
-
 check: all
 	$(with_temp_install) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule sql/twophase
 
