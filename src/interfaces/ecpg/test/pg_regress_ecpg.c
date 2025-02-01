@@ -22,7 +22,8 @@
 #include "lib/stringinfo.h"
 #include "pg_regress.h"
 
-#define NO_SOURCE_CHECK_TEST_PREFIX "../preproc/ecpg"
+#define NO_SOURCE_CHECK_TEST_PREFIX "ecpg"
+#define ECPG_COMMAND_PATH "../preproc/"
 
 
 /*
@@ -190,14 +191,16 @@ ecpg_start_test(const char *testname,
 	}
 
     /* Split testname by "#" if it contains "#" */
-    if (strstr(testname, "#") != NULL)
+    if (strstr(testname, "#") != NULL && is_no_source_check)
     {
 		initStringInfo(&testname_dash2);
+		appendStringInfoString(&testname_dash2, ECPG_COMMAND_PATH);
 		appendStringInfoString(&testname_dash2, testname);
         token = strtok(testname_dash2.data, "#");
         while (token != NULL && split_count < 10)
         {
             split_testnames[split_count++] = token;
+			printf("%s\n", token);
             token = strtok(NULL, "#");
         }
     }
@@ -208,7 +211,7 @@ ecpg_start_test(const char *testname,
 	snprintf(expectfile_stderr, sizeof(expectfile_stderr),
 			 "%s/expected/%s.stderr",
 			 expecteddir, testname_dash.data);
-	if (is_no_source_check == false)
+	if (!is_no_source_check)
 	{
 		snprintf(expectfile_source, sizeof(expectfile_source),
 				"%s/expected/%s.c",
@@ -221,7 +224,7 @@ ecpg_start_test(const char *testname,
 	snprintf(outfile_stderr, sizeof(outfile_stderr),
 			 "%s/results/%s.stderr",
 			 outputdir, testname_dash.data);
-	if (is_no_source_check == false)
+	if (!is_no_source_check)
 	{	 
 		snprintf(outfile_source, sizeof(outfile_source),
 				"%s/results/%s.c",
@@ -236,7 +239,7 @@ ecpg_start_test(const char *testname,
 	add_stringlist_item(expectfiles, expectfile_stderr);
 	add_stringlist_item(tags, "stderr");
 
-	if (is_no_source_check == false)
+	if (!is_no_source_check)
 	{	
 		add_stringlist_item(resultfiles, outfile_source);
 		add_stringlist_item(expectfiles, expectfile_source);
@@ -245,17 +248,23 @@ ecpg_start_test(const char *testname,
 		ecpg_filter_source(insource, outfile_source);
 	}
 
-	snprintf(cmd, sizeof(cmd),
-			 "\"%s\" >\"%s\" 2>\"%s\"",
-			 inprg,
-			 outfile_stdout,
-			 outfile_stderr);
-
 	appnameenv = psprintf("ecpg/%s", testname_dash.data);
 	setenv("PGAPPNAME", appnameenv, 1);
 	free(appnameenv);
 
-	pid = spawn_process(cmd);
+	if (is_no_source_check) {
+		pid = spawn_process_with_args(split_testnames[0], split_testnames, split_count);
+	}
+	else
+	{
+		snprintf(cmd, sizeof(cmd),
+				"\"%s\" >\"%s\" 2>\"%s\"",
+				inprg,
+				outfile_stdout,
+				outfile_stderr);		
+		pid = spawn_process(cmd);
+	}
+	
 
 	if (pid == INVALID_PID)
 	{
@@ -267,6 +276,10 @@ ecpg_start_test(const char *testname,
 	unsetenv("PGAPPNAME");
 
 	free(testname_dash.data);
+	if(is_no_source_check)
+	{
+		free(testname_dash2.data);
+	}
 
 	return pid;
 }

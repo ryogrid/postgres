@@ -1271,13 +1271,10 @@ spawn_process(const char *cmdline)
  * Returns the process ID (or HANDLE) so we can wait for it later
  */
 PID_TYPE
-spawn_process_with_args(const char *cmd, ...)
+spawn_process_with_args(const char *cmd, const char **args, int num_args)
 {
 #ifndef WIN32
     pid_t pid;
-    va_list args;
-    const char *arg;
-    const char *cmdline_arr[MAX_EXECV_ARG_LENGTH]; // shellprog, "-c", up to 5 args, NULL    
 	int i;
 
 	/*
@@ -1303,18 +1300,6 @@ spawn_process_with_args(const char *cmd, ...)
 		 * "exec" the command too.  This saves two useless processes per
 		 * parallel test case.
 		 */		
-        va_start(args, cmd);
-        cmdline_arr[0] = shellprog;
-        cmdline_arr[1] = "-c";
-		cmdline_arr[2] = cmd;
-		i = 3;
-        while (i < MAX_EXECV_ARG_LENGTH && (arg = va_arg(args, const char *)) != NULL)
-        {
-            cmdline_arr[i++] = arg;
-        }
-        va_end(args);
-        cmdline_arr[i] = NULL;
-
         execv(shellprog, (char *const *)cmdline_arr);
 
         /* Not using the normal bail() here as we want _exit */
@@ -1326,22 +1311,20 @@ spawn_process_with_args(const char *cmd, ...)
     PROCESS_INFORMATION pi;
     char *cmdline2;
     const char *comspec;
-    va_list args;
     char cmdline[1024] = "";
-    const char *arg;	
+    const char *arg;
+	int i;
 
     /* Find CMD.EXE location using COMSPEC, if it's set */
     comspec = getenv("COMSPEC");
     if (comspec == NULL)
         comspec = "CMD";
 
-    va_start(args, cmd);
-    while ((arg = va_arg(args, const char *)) != NULL)
-    {
-        strcat(cmdline, arg);
-        strcat(cmdline, " ");
-    }
-    va_end(args);
+    for(i = 0; i < num_args; i++)
+	{
+		strcat(cmdline, args[i]);
+		strcat(cmdline, " ");
+	}
 
     memset(&pi, 0, sizeof(pi));
     cmdline2 = psprintf("\"%s\" /c \"%s\"", comspec, cmdline);
