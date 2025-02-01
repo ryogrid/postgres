@@ -208,7 +208,7 @@ ecpg_start_test(const char *testname,
 	snprintf(expectfile_stderr, sizeof(expectfile_stderr),
 			 "%s/expected/%s.stderr",
 			 expecteddir, testname_dash.data);
-	if (!is_no_source_check)
+	if (is_no_source_check == false)
 	{
 		snprintf(expectfile_source, sizeof(expectfile_source),
 				"%s/expected/%s.c",
@@ -221,7 +221,7 @@ ecpg_start_test(const char *testname,
 	snprintf(outfile_stderr, sizeof(outfile_stderr),
 			 "%s/results/%s.stderr",
 			 outputdir, testname_dash.data);
-	if (!is_no_source_check)
+	if (is_no_source_check == false)
 	{	 
 		snprintf(outfile_source, sizeof(outfile_source),
 				"%s/results/%s.c",
@@ -236,7 +236,7 @@ ecpg_start_test(const char *testname,
 	add_stringlist_item(expectfiles, expectfile_stderr);
 	add_stringlist_item(tags, "stderr");
 
-	if (!is_no_source_check)
+	if (is_no_source_check == false)
 	{	
 		add_stringlist_item(resultfiles, outfile_source);
 		add_stringlist_item(expectfiles, expectfile_source);
