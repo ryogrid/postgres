@@ -72,6 +72,18 @@ ecpg_regress_args = [
   '--create-role=regress_ecpg_user1,regress_ecpg_user2',
 ]
 
+configure_file(
+    input: 'notice.pgc',
+    output: 'notice.pgc',
+    copy: true
+)
+
+configure_file(
+    input: 'notice_informix.pgc',
+    output: 'notice_informix.pgc',
+    copy: true
+)
+
 tests += {
   'name': 'ecpg',
   'sd': meson.current_source_dir(),
@@ -80,7 +92,6 @@ tests += {
     'expecteddir': meson.current_source_dir(),
     'inputdir': meson.current_build_dir(),
     'schedule': ecpg_test_files,
-    'bindir': meson.current_build_dir() + '/../preproc/',
     'sql': [
       'sql/twophase',
     ],

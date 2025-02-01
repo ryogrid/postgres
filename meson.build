@@ -3418,11 +3418,6 @@ foreach test_dir : tests
         'env': env,
       } + t.get('test_kwargs', {})
 
-      # # for ecpg command can be specified in schedule file
-      # if kind == 'ecpg'        
-      #   env.prepend('PATH', test_dir['bd'] + '/..' + '/preproc')
-      # endif
-
       test(test_group / kind,
         python,
         args: [
