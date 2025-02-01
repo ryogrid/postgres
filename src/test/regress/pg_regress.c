@@ -1300,7 +1300,7 @@ spawn_process_with_args(const char *cmd, const char **args, int num_args)
 		 * "exec" the command too.  This saves two useless processes per
 		 * parallel test case.
 		 */		
-        execv(shellprog, (char *const *)cmdline_arr);
+        execv(shellprog, (char *const *)args);
 
         /* Not using the normal bail() here as we want _exit */
         bail_noatexit("could not exec \"%s\": %m", shellprog);
