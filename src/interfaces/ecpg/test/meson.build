@@ -84,18 +84,6 @@ configure_file(
     copy: true
 )
 
-ecpg_out = 'ecpg'
-if host_system == 'windows'
-  ecpg_out = 'ecpg.exe'
-endif
-
-configure_file(
-    input: ecpg_exe.full_path(),
-    output: ecpg_out,
-    copy: true
-)
-
-
 tests += {
   'name': 'ecpg',
   'sd': meson.current_source_dir(),

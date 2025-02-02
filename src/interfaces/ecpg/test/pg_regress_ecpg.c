@@ -24,13 +24,6 @@
 
 #define NO_SOURCE_CHECK_TEST_PREFIX "ecpg"
 
-#ifdef WIN32
-#define ECPG_COMMAND_PATH ""
-#else
-#define ECPG_COMMAND_PATH "./"
-#endif
-
-
 /*
  * Create a filtered copy of sourcefile, removing any path
  * appearing in #line directives; for example, replace
@@ -199,7 +192,6 @@ ecpg_start_test(const char *testname,
     if (strstr(testname, "#") != NULL && is_no_source_check)
     {
 		initStringInfo(&testname_dash2);
-		appendStringInfoString(&testname_dash2, ECPG_COMMAND_PATH);
 		appendStringInfoString(&testname_dash2, testname);
         token = strtok(testname_dash2.data, "#");
         while (token != NULL && split_count < 10)
