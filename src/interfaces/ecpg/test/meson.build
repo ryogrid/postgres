@@ -65,27 +65,29 @@ if host_system == 'windows'
   notice_pgc = configure_file(
       input: 'notice.pgc',
       output: 'notice.pgc',
-      copy: true
+      copy: true,
   )
 
   notice_informix_pgc = configure_file(
       input: 'notice_informix.pgc',
       output: 'notice_informix.pgc',
-      copy: true
+      copy: true,
   )
 
   ecpg_wrapper_bat = configure_file(
       input: 'ecpg_wrapper.bat',
       output: 'ecpg_wrapper.bat',
-      copy: true
+      copy: true,
   )
 
   ecpg_wrapper_sh = configure_file(
       input: 'ecpg_wrapper.sh',
       output: 'ecpg_wrapper.sh',
-      copy: true
+      copy: true,
   )
+
 else
+
   copy_materials = custom_target('copy_materials',
     input: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
     output: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
