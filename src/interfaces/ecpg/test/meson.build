@@ -91,7 +91,7 @@ else
   copy_materials = custom_target('copy_materials',
     input: [meson.current_source_dir() / 'notice.pgc', meson.current_source_dir() / 'notice_informix.pgc', meson.current_source_dir() / 'ecpg_wrapper.bat', meson.current_source_dir() / 'ecpg_wrapper.sh'],
     output: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
-    command: ['cp -f @INPUT0@ ' + meson.current_build_dir() + '/ && cp -f @INPUT1@ ' + meson.current_build_dir() + '/ && cp -f @INPUT2@ ' + meson.current_build_dir() + '/ && cp -f @INPUT3@ ' + meson.current_build_dir() + '/' ],
+    command: ['/bin/sh', '-c', 'cp -f @INPUT0@ ' + meson.current_build_dir() + '/ && cp -f @INPUT1@ ' + meson.current_build_dir() + '/ && cp -f @INPUT2@ ' + meson.current_build_dir() + '/ && cp -f @INPUT3@ ' + meson.current_build_dir() + '/' ],
     build_by_default: true,
   )
   ecpg_test_dependencies += copy_materials
