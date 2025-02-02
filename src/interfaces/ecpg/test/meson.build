@@ -89,8 +89,8 @@ if host_system == 'windows'
 else
 
   copy_materials = custom_target('copy_materials',
-    input: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
-    output: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
+    input: [meson.current_source_dir() / 'notice.pgc', meson.current_source_dir() / 'notice_informix.pgc', meson.current_source_dir() / 'ecpg_wrapper.bat', meson.current_source_dir() / 'ecpg_wrapper.sh'],
+    output: [meson.current_build_dir() / 'notice.pgc', meson.current_build_dir() / 'notice_informix.pgc', meson.current_build_dir() / 'ecpg_wrapper.bat', meson.current_build_dir() / 'ecpg_wrapper.sh'],
     command: ['cp -f @INPUT0@ @OUTPUT0@ && cp -f @INPUT1@ @OUTPUT1@ && cp -f @INPUT2@ @OUTPUT2@ && cp -f @INPUT3@ @OUTPUT3@' ],
     build_by_default: true,
   )
