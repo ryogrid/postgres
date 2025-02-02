@@ -210,6 +210,13 @@ ecpg_start_test(const char *testname,
             token = strtok(NULL, CMD_ARG_DELIMITER);
 			//printf("%s\n", token);
         }
+		
+		#ifdef WIN32
+			splited_tokens[0] = "ecpg_wrapper.bat";
+		#else
+			splited_tokens[0] = "ecpg_wrapper.sh";
+		#endif
+		
 		for(i = 0; i < split_count; i++)
 		{
 			strcat(splited_testname, splited_tokens[i]);
