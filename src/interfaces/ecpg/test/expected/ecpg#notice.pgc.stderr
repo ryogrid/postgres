@@ -1,0 +1,13 @@
+notice.pgc:16: ERROR: AT option not allowed in CONNECT statement
+notice.pgc:17: ERROR: AT option not allowed in DISCONNECT statement
+notice.pgc:18: ERROR: AT option not allowed in SET CONNECTION statement
+notice.pgc:21: WARNING: COPY FROM STDIN is not implemented
+notice.pgc:25: ERROR: using variable "cursor_var" in different declare statements is not supported
+notice.pgc:28: ERROR: cursor "duplicate_cursor" is already defined
+notice.pgc:31: ERROR: SHOW ALL is not implemented
+notice.pgc:33: ERROR: AT option not allowed in WHENEVER statement
+notice.pgc:36: WARNING: no longer supported LIMIT #,# syntax passed to server
+notice.pgc:39: WARNING: cursor "duplicate_cursor" has been declared but not opened
+notice.pgc:39: WARNING: cursor "duplicate_cursor" has been declared but not opened
+notice.pgc:39: WARNING: cursor ":cursor_var" has been declared but not opened
+notice.pgc:39: WARNING: cursor ":cursor_var" has been declared but not opened
