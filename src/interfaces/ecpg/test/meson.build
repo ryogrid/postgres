@@ -84,6 +84,18 @@ configure_file(
     copy: true
 )
 
+configure_file(
+    input: 'ecpg_wrapper.bat',
+    output: 'ecpg_wrapper.bat',
+    copy: true
+)
+
+configure_file(
+    input: 'ecpg_wrapper.sh',
+    output: 'ecpg_wrapper.sh',
+    copy: true
+)
+
 tests += {
   'name': 'ecpg',
   'sd': meson.current_source_dir(),
