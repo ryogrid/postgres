@@ -68,14 +68,14 @@ REGRESS_OPTS =  --expecteddir=$(srcdir) \
   --dbname=ecpg1_regression,ecpg2_regression --create-role=regress_ecpg_user1,regress_ecpg_user2 \
   $(EXTRA_REGRESS_OPTS)
 
-ECPG_CMD_BIN_PATH = '$(top_builddir)/src/interfaces/ecpg/preproc'
+with_ecpg_cmd_bin = "PATH=$(top_builddir)/src/interfaces/ecpg/preproc:$(PATH)"
 
 check: all
-	$(with_temp_install):$(ECPG_CMD_BIN_PATH) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule sql/twophase
+	$(with_temp_install) $(with_ecpg_cmd_bin) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule sql/twophase
 
 # Connect to the server using TCP, and add a TCP-specific test.
 checktcp: all | temp-install
-	$(with_temp_install):$(ECPG_CMD_BIN_PATH) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule --host=localhost sql/twophase connect/test1
+	$(with_temp_install) $(with_ecpg_cmd_bin) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule --host=localhost sql/twophase connect/test1
 
 installcheck: all
 	./pg_regress $(REGRESS_OPTS) --bindir='$(bindir)' $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule
@@ -89,4 +89,4 @@ installcheck-prepared-txns: all
 	./pg_regress $(REGRESS_OPTS) --bindir='$(bindir)' $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule sql/twophase
 
 check-prepared-txns: all | temp-install
-	$(with_temp_install):$(ECPG_CMD_BIN_PATH) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule sql/twophase
+	$(with_temp_install) $(with_ecpg_cmd_bin) ./pg_regress $(REGRESS_OPTS) --temp-instance=./tmp_check $(TEMP_CONF) --bindir= $(pg_regress_locale_flags) $(THREAD) --schedule=$(srcdir)/ecpg_schedule sql/twophase
