@@ -25,37 +25,6 @@ pg_regress_ecpg = executable('pg_regress_ecpg',
 )
 testprep_targets += pg_regress_ecpg
 
-notice_pgc = configure_file(
-    input: 'notice.pgc',
-    output: 'notice.pgc',
-    copy: true
-)
-
-notice_informix_pgc = configure_file(
-    input: 'notice_informix.pgc',
-    output: 'notice_informix.pgc',
-    copy: true
-)
-
-ecpg_wrapper_bat = configure_file(
-    input: 'ecpg_wrapper.bat',
-    output: 'ecpg_wrapper.bat',
-    copy: true
-)
-
-ecpg_wrapper_sh = configure_file(
-    input: 'ecpg_wrapper.sh',
-    output: 'ecpg_wrapper.sh',
-    copy: true
-)
-
-# config_dep = declare_dependency(
-#   sources: [notice_pgc, notice_informix_pgc, ecpg_wrapper_bat, ecpg_wrapper_sh],
-# )
-
-# dep_files = ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh']
-# install_data(dep_files, install_dir: meson.current_build_dir())
-
 # create .c files and executables from .pgc files
 ecpg_test_exec_kw = {
   'c_args': cflags_no_missing_var_decls,
@@ -91,6 +60,40 @@ subdir('pgtypeslib')
 subdir('preproc')
 subdir('sql')
 subdir('thread')
+
+if host_system == 'windows'
+  notice_pgc = configure_file(
+      input: 'notice.pgc',
+      output: 'notice.pgc',
+      copy: true
+  )
+
+  notice_informix_pgc = configure_file(
+      input: 'notice_informix.pgc',
+      output: 'notice_informix.pgc',
+      copy: true
+  )
+
+  ecpg_wrapper_bat = configure_file(
+      input: 'ecpg_wrapper.bat',
+      output: 'ecpg_wrapper.bat',
+      copy: true
+  )
+
+  ecpg_wrapper_sh = configure_file(
+      input: 'ecpg_wrapper.sh',
+      output: 'ecpg_wrapper.sh',
+      copy: true
+  )
+else
+  copy_materials = custom_target('copy_materials',
+    input: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
+    output: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
+    command: ['cp', '-f', '@INPUT@', meson.current_build_dir() / ],
+    build_by_default: false,
+  )
+  ecpg_test_dependencies += copy_materials
+endif
 
 testprep_targets += ecpg_test_dependencies
 
