@@ -81,11 +81,6 @@ const char *pretty_diff_opts = "--strip-trailing-cr -U3";
  */
 #define WAIT_TICKS_PER_SECOND 20
 
-/*
- * The max length of second argument of execv on spawn_process_with_args
-*/
-#define MAX_EXECV_ARG_LENGTH 7
-
 typedef enum TAPtype
 {
 	DIAG = 0,
@@ -1261,95 +1256,6 @@ spawn_process(const char *cmdline)
 
 	CloseHandle(pi.hThread);
 	return pi.hProcess;
-#endif
-}
-
-
-/*
- * Spawn a process to execute the given shell command and args; don't wait for it
- *
- * Returns the process ID (or HANDLE) so we can wait for it later
- */
-PID_TYPE
-spawn_process_with_args(const char *cmd, const char **args, int num_args)
-{
-#ifndef WIN32
-    pid_t pid;
-	int i;
-	char *args2[11];
-	char cmdline[1024] = "";
-
-	/*
-	 * Must flush I/O buffers before fork.
-	 */
-	fflush(NULL);
-
-	#ifdef EXEC_BACKEND
-		pg_disable_aslr();
-	#endif
-
-    pid = fork();
-    if (pid == -1)
-    {
-        bail("could not fork: %m");
-    }
-    if (pid == 0)
-    {
-		/*
-		 * In child
-		 *
-		 * Instead of using system(), exec the shell directly, and tell it to
-		 * "exec" the command too.  This saves two useless processes per
-		 * parallel test case.
-		 */
-		args2[0] = shellprog;
-		args2[1] = "-c";
-		strcat(cmdline, "exec ");
-		for(i = 0; i < num_args; i++)
-		{
-			strcat(cmdline, args[i]);
-			strcat(cmdline, " ");
-		}
-		args2[2] = cmdline;
-		// for (i = 2; i < num_args + 2; i++) 
-		// {
-		// 	args2[i] = args[i - 2];
-		// }
-		args2[3] = NULL;
-        execv(shellprog, (char *const *)args2);
-
-        /* Not using the normal bail() here as we want _exit */
-        bail_noatexit("could not exec \"%s\": %m", shellprog);
-    }
-    /* in parent */
-    return pid;
-#else
-    PROCESS_INFORMATION pi;
-    char *cmdline2;
-    const char *comspec;
-    char cmdline[1024] = "";
-    const char *arg;
-	int i;
-
-    /* Find CMD.EXE location using COMSPEC, if it's set */
-    comspec = getenv("COMSPEC");
-    if (comspec == NULL)
-        comspec = "CMD";
-
-    for(i = 0; i < num_args; i++)
-	{
-		strcat(cmdline, args[i]);
-		strcat(cmdline, " ");
-	}
-
-    memset(&pi, 0, sizeof(pi));
-    cmdline2 = psprintf("\"%s\" /c \"%s\"", comspec, cmdline);
-
-    if (!CreateRestrictedProcess(cmdline2, &pi))
-        exit(2);
-
-    CloseHandle(pi.hThread);
-    return pi.hProcess;
 #endif
 }
 

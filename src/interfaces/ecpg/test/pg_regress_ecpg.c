@@ -23,6 +23,7 @@
 #include "pg_regress.h"
 
 #define NO_SOURCE_CHECK_TEST_PREFIX "ecpg"
+#define CMD_ARG_DELIMITER "#"
 
 /*
  * Create a filtered copy of sourcefile, removing any path
@@ -160,18 +161,17 @@ ecpg_start_test(const char *testname,
 	char		outfile_stderr[MAXPGPATH],
 				expectfile_stderr[MAXPGPATH];
 	char		outfile_source[MAXPGPATH],
-				expectfile_source[MAXPGPATH];	
+				expectfile_source[MAXPGPATH];
+	char		splited_testname[MAXPGPATH * 3] = "";
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
 	bool 		is_no_source_check = false;
 	StringInfoData testname_dash2;
 	/* Assuming a maximum of 10 split parts */
-	char       *split_testnames[10];
+	char       *splited_tokens[10];
 	int			split_count = 0;
 	char		*token;
-
-	snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
-	snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
+	int 		i;
 
 	/* make a version of the test name that has dashes in place of slashes */
 	initStringInfo(&testname_dash);
@@ -188,17 +188,34 @@ ecpg_start_test(const char *testname,
 		is_no_source_check = true;
 	}
 
-    /* Split testname by "#" if it contains "#" */
-    if (strstr(testname, "#") != NULL && is_no_source_check)
+	if (!is_no_source_check)
+	{
+		snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
+	}
+	snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
+
+    /* Split testname by CMD_ARG_DELIMITER if it contains CMD_ARG_DELIMITER */
+    if (strstr(testname, CMD_ARG_DELIMITER) != NULL && is_no_source_check)
     {
 		initStringInfo(&testname_dash2);
 		appendStringInfoString(&testname_dash2, testname);
-        token = strtok(testname_dash2.data, "#");
+		//printf("%s\n", testname);
+		//printf("%s\n", testname_dash2.data);
+
+		/* replace CMD_ARG_DELIMITER to spaces */
+        token = strtok(testname_dash2.data, CMD_ARG_DELIMITER);
         while (token != NULL && split_count < 10)
         {
-            split_testnames[split_count++] = token;
-            token = strtok(NULL, "#");
+            splited_tokens[split_count++] = token;
+            token = strtok(NULL, CMD_ARG_DELIMITER);
+			//printf("%s\n", token);
         }
+		for(i = 0; i < split_count; i++)
+		{
+			strcat(splited_testname, splited_tokens[i]);
+			strcat(splited_testname, " ");
+		}
+		//printf("%s\n", splited_testname);
     }
 
 	snprintf(expectfile_stdout, sizeof(expectfile_stdout),
@@ -248,8 +265,13 @@ ecpg_start_test(const char *testname,
 	setenv("PGAPPNAME", appnameenv, 1);
 	free(appnameenv);
 
-	if (is_no_source_check) {
-		pid = spawn_process_with_args(split_testnames[0], split_testnames, split_count);
+	if (is_no_source_check)
+	{
+		snprintf(cmd, sizeof(cmd),
+				"%s >\"%s\" 2>\"%s\"",
+				splited_testname,
+				outfile_stdout,
+				outfile_stderr);
 	}
 	else
 	{
@@ -257,10 +279,9 @@ ecpg_start_test(const char *testname,
 				"\"%s\" >\"%s\" 2>\"%s\"",
 				inprg,
 				outfile_stdout,
-				outfile_stderr);		
-		pid = spawn_process(cmd);
-	}
-	
+				outfile_stderr);
+	}		
+	pid = spawn_process(cmd);
 
 	if (pid == INVALID_PID)
 	{
