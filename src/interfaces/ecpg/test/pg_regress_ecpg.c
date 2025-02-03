@@ -191,8 +191,8 @@ ecpg_start_test(const char *testname,
 	if (!is_no_source_check)
 	{
 		snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
-	}
-	snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
+		snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
+	}	
 
     /* Split testname by CMD_ARG_DELIMITER if it contains CMD_ARG_DELIMITER */
     if (strstr(testname, CMD_ARG_DELIMITER) != NULL && is_no_source_check)

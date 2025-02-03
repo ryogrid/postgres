@@ -3410,13 +3410,6 @@ foreach test_dir : tests
       env = test_env
       env.prepend('PATH', temp_install_bindir, test_dir['bd'])
 
-      # # for ecpg command and materials for testing
-      # if kind == 'ecpg'
-      #   #env.prepend('PATH', temp_install_bindir, test_dir['bd'], meson.build_root() / 'src' / 'interfaces' / 'ecpg' / 'preproc')
-      #   #env.prepend('PATH', meson.source_root() / 'src' / 'interfaces' / 'ecpg' / 'test')
-      #   env.prepend('PATH', meson.build_root() / 'src' / 'interfaces' / 'ecpg' / 'preproc')
-      # endif
-
       test_kwargs = {
         'protocol': 'tap',
         'priority': 10,
