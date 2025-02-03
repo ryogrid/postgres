@@ -61,41 +61,41 @@ subdir('preproc')
 subdir('sql')
 subdir('thread')
 
-if host_system == 'windows'
-  notice_pgc = configure_file(
-      input: 'notice.pgc',
-      output: 'notice.pgc',
-      copy: true,
-  )
+# if host_system == 'windows'
+notice_pgc = configure_file(
+    input: 'notice.pgc',
+    output: 'notice.pgc',
+    copy: true,
+)
 
-  notice_informix_pgc = configure_file(
-      input: 'notice_informix.pgc',
-      output: 'notice_informix.pgc',
-      copy: true,
-  )
+notice_informix_pgc = configure_file(
+    input: 'notice_informix.pgc',
+    output: 'notice_informix.pgc',
+    copy: true,
+)
 
-  ecpg_wrapper_bat = configure_file(
-      input: 'ecpg_wrapper.bat',
-      output: 'ecpg_wrapper.bat',
-      copy: true,
-  )
+ecpg_wrapper_bat = configure_file(
+    input: 'ecpg_wrapper.bat',
+    output: 'ecpg_wrapper.bat',
+    copy: true,
+)
 
-  ecpg_wrapper_sh = configure_file(
-      input: 'ecpg_wrapper.sh',
-      output: 'ecpg_wrapper.sh',
-      copy: true,
-  )
+ecpg_wrapper_sh = configure_file(
+    input: 'ecpg_wrapper.sh',
+    output: 'ecpg_wrapper.sh',
+    copy: true,
+)
 
-else
+# else
 
-  copy_materials = custom_target('copy_materials',
-    input: [meson.current_source_dir() / 'notice.pgc', meson.current_source_dir() / 'notice_informix.pgc', meson.current_source_dir() / 'ecpg_wrapper.bat', meson.current_source_dir() / 'ecpg_wrapper.sh'],
-    output: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
-    command: ['/bin/sh', '-c', 'cp -f @INPUT0@ ' + meson.current_build_dir() + '/ && cp -f @INPUT1@ ' + meson.current_build_dir() + '/ && cp -f @INPUT2@ ' + meson.current_build_dir() + '/ && cp -f @INPUT3@ ' + meson.current_build_dir() + '/' ],
-    build_by_default: true,
-  )
-  ecpg_test_dependencies += copy_materials
-endif
+#   copy_materials = custom_target('copy_materials',
+#     input: [meson.current_source_dir() / 'notice.pgc', meson.current_source_dir() / 'notice_informix.pgc', meson.current_source_dir() / 'ecpg_wrapper.bat', meson.current_source_dir() / 'ecpg_wrapper.sh'],
+#     output: ['notice.pgc', 'notice_informix.pgc', 'ecpg_wrapper.bat', 'ecpg_wrapper.sh'],
+#     command: ['/bin/sh', '-c', 'cp -f @INPUT0@ ' + meson.current_build_dir() + '/ && cp -f @INPUT1@ ' + meson.current_build_dir() + '/ && cp -f @INPUT2@ ' + meson.current_build_dir() + '/ && cp -f @INPUT3@ ' + meson.current_build_dir() + '/' ],
+#     build_by_default: true,
+#   )
+#   ecpg_test_dependencies += copy_materials
+# endif
 
 testprep_targets += ecpg_test_dependencies
 
