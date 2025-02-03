@@ -1,6 +1,6 @@
 #!/bin/sh
 
-PATH=../preproc/ecpg:$PATH
+PATH=../preproc/:$PATH
 ecpg "$@"
 
 # always return 0 for testing purposes
