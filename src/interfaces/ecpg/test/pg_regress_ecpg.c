@@ -259,7 +259,8 @@ ecpg_start_test(const char *testname,
 			"\"%s\" >\"%s\" 2>\"%s\"",
 			inprg,
 			outfile_stdout,
-			outfile_stderr);		
+			outfile_stderr);
+	printf("cmd: %s\n", cmd);					
 	pid = spawn_process(cmd);
 
 	if (pid == INVALID_PID)
