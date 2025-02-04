@@ -1,7 +1,5 @@
 # Copyright (c) 2022-2025, PostgreSQL Global Development Group
 
-fs = import('fs')
-
 pgc_files = [
   'array_of_struct',
   'autoprep',
