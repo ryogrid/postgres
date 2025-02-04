@@ -31,6 +31,8 @@ test: preproc/variable
 test: preproc/outofscope
 test: preproc/whenever
 test: preproc/whenever_do_continue
+test: preproc/notice_check
+test: preproc/notice_informix_check
 test: sql/array
 test: sql/binary
 test: sql/bytea
@@ -62,4 +64,3 @@ test: thread/thread_implicit
 test: thread/prep
 test: thread/alloc
 test: thread/descriptor
-test: ecpg#notice.pgc

@@ -61,30 +61,6 @@ subdir('preproc')
 subdir('sql')
 subdir('thread')
 
-notice_pgc = configure_file(
-    input: 'notice.pgc',
-    output: 'notice.pgc',
-    copy: true,
-)
-
-notice_informix_pgc = configure_file(
-    input: 'notice_informix.pgc',
-    output: 'notice_informix.pgc',
-    copy: true,
-)
-
-ecpg_wrapper_bat = configure_file(
-    input: 'ecpg_wrapper.bat',
-    output: 'ecpg_wrapper.bat',
-    copy: true,
-)
-
-ecpg_wrapper_sh = configure_file(
-    input: 'ecpg_wrapper.sh',
-    output: 'ecpg_wrapper.sh',
-    copy: true,
-)
-
 testprep_targets += ecpg_test_dependencies
 
 ecpg_test_files = files(

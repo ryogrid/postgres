@@ -22,8 +22,7 @@
 #include "lib/stringinfo.h"
 #include "pg_regress.h"
 
-#define NO_SOURCE_CHECK_TEST_PREFIX "ecpg"
-#define CMD_ARG_DELIMITER "#"
+#define NO_SOURCE_CHECK_TEST_PREFIX "preproc/notice"
 
 /*
  * Create a filtered copy of sourcefile, removing any path
@@ -116,7 +115,7 @@ ecpg_filter_stderr(const char *resultfile, const char *tmpfile)
 	while (pg_get_line_buf(s, &linebuf))
 	{
 		char	   *p1 = strstr(linebuf.data, "connection to server ");
-
+		
 		if (p1)
 		{
 			char	   *p2 = strstr(p1, "failed: ");
@@ -127,6 +126,20 @@ ecpg_filter_stderr(const char *resultfile, const char *tmpfile)
 				/* we don't bother to fix up linebuf.len */
 			}
 		}
+
+		/* when ecpg command notice test*/
+		char 	   *p3 = strstr(linebuf.data, "preproc");
+		if (p3)
+		{			
+			char       *p4 = strstr(p3, "notice");
+
+			if (p4)
+			{
+				memmove(p3, p4, strlen(p4) + 1);
+				/* we don't bother to fix up linebuf.len */
+			}
+		}
+
 		fputs(linebuf.data, t);
 	}
 
@@ -166,12 +179,6 @@ ecpg_start_test(const char *testname,
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
 	bool 		is_no_source_check = false;
-	StringInfoData testname_dash2;
-	/* Assuming a maximum of 10 split parts */
-	char       *splited_tokens[10];
-	int			split_count = 0;
-	char		*token;
-	int 		i;
 
 	/* make a version of the test name that has dashes in place of slashes */
 	initStringInfo(&testname_dash);
@@ -188,42 +195,19 @@ ecpg_start_test(const char *testname,
 		is_no_source_check = true;
 	}
 
-	if (!is_no_source_check)
+	if (is_no_source_check)
+	{
+		#ifdef WIN32
+			snprintf(inprg, sizeof(inprg), "%s/%s.bat", inputdir, testname);
+		#else
+			snprintf(inprg, sizeof(inprg), "%s/%s.sh", inputdir, testname);
+		#endif					
+	}
+	else
 	{
 		snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
-		snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
-	}	
-
-    /* Split testname by CMD_ARG_DELIMITER if it contains CMD_ARG_DELIMITER */
-    if (strstr(testname, CMD_ARG_DELIMITER) != NULL && is_no_source_check)
-    {
-		initStringInfo(&testname_dash2);
-		appendStringInfoString(&testname_dash2, testname);
-		//printf("%s\n", testname);
-		//printf("%s\n", testname_dash2.data);
-
-		/* replace CMD_ARG_DELIMITER to spaces */
-        token = strtok(testname_dash2.data, CMD_ARG_DELIMITER);
-        while (token != NULL && split_count < 10)
-        {
-            splited_tokens[split_count++] = token;
-            token = strtok(NULL, CMD_ARG_DELIMITER);
-			//printf("%s\n", token);
-        }
-		
-		#ifdef WIN32
-			splited_tokens[0] = ".\\ecpg_wrapper.bat";
-		#else
-			splited_tokens[0] = "./ecpg_wrapper.sh";
-		#endif
-		
-		for(i = 0; i < split_count; i++)
-		{
-			strcat(splited_testname, splited_tokens[i]);
-			strcat(splited_testname, " ");
-		}
-		//printf("%s\n", splited_testname);
-    }
+		snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);		
+	}
 
 	snprintf(expectfile_stdout, sizeof(expectfile_stdout),
 			 "%s/expected/%s.stdout",
@@ -272,22 +256,11 @@ ecpg_start_test(const char *testname,
 	setenv("PGAPPNAME", appnameenv, 1);
 	free(appnameenv);
 
-	if (is_no_source_check)
-	{
-		snprintf(cmd, sizeof(cmd),
-				"%s >\"%s\" 2>\"%s\"",
-				splited_testname,
-				outfile_stdout,
-				outfile_stderr);
-	}
-	else
-	{
-		snprintf(cmd, sizeof(cmd),
-				"\"%s\" >\"%s\" 2>\"%s\"",
-				inprg,
-				outfile_stdout,
-				outfile_stderr);
-	}		
+	snprintf(cmd, sizeof(cmd),
+			"\"%s\" >\"%s\" 2>\"%s\"",
+			inprg,
+			outfile_stdout,
+			outfile_stderr);		
 	pid = spawn_process(cmd);
 
 	if (pid == INVALID_PID)
@@ -300,10 +273,6 @@ ecpg_start_test(const char *testname,
 	unsetenv("PGAPPNAME");
 
 	free(testname_dash.data);
-	if(is_no_source_check)
-	{
-		free(testname_dash2.data);
-	}
 
 	return pid;
 }
