@@ -260,10 +260,6 @@ ecpg_start_test(const char *testname,
 			inprg,
 			outfile_stdout,
 			outfile_stderr);
-	// if (is_no_source_check)
-	// {
-	// 	printf("cmd: %s\n", cmd);
-	// }
 	
 	pid = spawn_process(cmd);
 
