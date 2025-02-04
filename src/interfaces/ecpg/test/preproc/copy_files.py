@@ -11,7 +11,7 @@ def main():
     destination = sys.argv[2]
     files = sys.argv[3:]
 
-    os.makedirs(destination, exist_ok=True)
+    # os.makedirs(destination, exist_ok=True)
 
     for file in files:
         src_path = os.path.join(src, os.path.basename(file))
