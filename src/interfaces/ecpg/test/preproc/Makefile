@@ -31,4 +31,3 @@ autoprep.c: autoprep.pgc $(ECPG_TEST_DEPENDENCIES)
 
 strings.c: strings.pgc strings.h $(ECPG_TEST_DEPENDENCIES)
 	$(ECPG) -i -o $@ $<
-
