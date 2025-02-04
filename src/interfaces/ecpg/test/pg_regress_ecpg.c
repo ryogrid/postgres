@@ -22,7 +22,13 @@
 #include "lib/stringinfo.h"
 #include "pg_regress.h"
 
-#define NO_SOURCE_CHECK_TEST_PREFIX "preproc/notice"
+#define ECPG_CMD_NOTICE_TEST_PREFIX "preproc/notice"
+
+/*
+ * Tests whose prefix is ECPG_CMD_NOTICE_TEST_PREFIX check ecpg command's notice
+ * such as error or warning. Not checking of compiled ECPG programs behavior. 
+ * So, we handle these tests differently.
+ */
 
 /*
  * Create a filtered copy of sourcefile, removing any path
@@ -178,7 +184,7 @@ ecpg_start_test(const char *testname,
 				expectfile_source[MAXPGPATH];
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
-	bool		is_no_source_check = false;
+	bool		is_ecpg_cmd_notice_test = false;
 
 	/* make a version of the test name that has dashes in place of slashes */
 	initStringInfo(&testname_dash);
@@ -189,13 +195,13 @@ ecpg_start_test(const char *testname,
 			*c = '-';
 	}
 
-	/* check for NO_SOURCE_CHECK_TEST_PRFIX literal in the beginning */
-	if (strstr(testname, NO_SOURCE_CHECK_TEST_PREFIX) == testname)
+	/* check for ECPG_CMD_NOTICE_TEST_PREFIX literal in the beginning */
+	if (strstr(testname, ECPG_CMD_NOTICE_TEST_PREFIX) == testname)
 	{
-		is_no_source_check = true;
+		is_ecpg_cmd_notice_test = true;
 	}
 
-	if (is_no_source_check)
+	if (is_ecpg_cmd_notice_test)
 	{
 #ifdef WIN32
 		snprintf(inprg, sizeof(inprg), "%s/%s.bat", inputdir, testname);
@@ -215,7 +221,7 @@ ecpg_start_test(const char *testname,
 	snprintf(expectfile_stderr, sizeof(expectfile_stderr),
 			 "%s/expected/%s.stderr",
 			 expecteddir, testname_dash.data);
-	if (!is_no_source_check)
+	if (!is_ecpg_cmd_notice_test)
 	{
 		snprintf(expectfile_source, sizeof(expectfile_source),
 				 "%s/expected/%s.c",
@@ -228,7 +234,7 @@ ecpg_start_test(const char *testname,
 	snprintf(outfile_stderr, sizeof(outfile_stderr),
 			 "%s/results/%s.stderr",
 			 outputdir, testname_dash.data);
-	if (!is_no_source_check)
+	if (!is_ecpg_cmd_notice_test)
 	{
 		snprintf(outfile_source, sizeof(outfile_source),
 				 "%s/results/%s.c",
@@ -243,7 +249,7 @@ ecpg_start_test(const char *testname,
 	add_stringlist_item(expectfiles, expectfile_stderr);
 	add_stringlist_item(tags, "stderr");
 
-	if (!is_no_source_check)
+	if (!is_ecpg_cmd_notice_test)
 	{
 		add_stringlist_item(resultfiles, outfile_source);
 		add_stringlist_item(expectfiles, expectfile_source);
