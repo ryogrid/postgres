@@ -16,6 +16,7 @@ main(void)
     EXEC SQL AT connection1 CONNECT TO testdb;
     EXEC SQL AT connection1 DISCONNECT;
     EXEC SQL AT connection1 SET CONNECTION TO testdb;
+    EXEC SQL AT connection1 TYPE string IS char[11];
 
     /* Test COPY FROM STDIN warning */
     EXEC SQL COPY test FROM stdin;
