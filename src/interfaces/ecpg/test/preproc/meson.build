@@ -51,7 +51,7 @@ copy_materials = [
 ]
 
 copy_cmdline = [
-  'python',
+  python,
   meson.current_source_dir() / 'copy_files.py',
   meson.current_source_dir(),
   meson.current_build_dir()
