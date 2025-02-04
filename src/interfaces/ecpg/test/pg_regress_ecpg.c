@@ -115,8 +115,9 @@ ecpg_filter_stderr(const char *resultfile, const char *tmpfile)
 	while (pg_get_line_buf(s, &linebuf))
 	{
 		char	   *p1 = strstr(linebuf.data, "connection to server ");
-		/* when ecpg command notice test*/
-		char 	   *p3 = strstr(linebuf.data, "preproc");
+
+		/* when ecpg command notice test */
+		char	   *p3 = strstr(linebuf.data, "preproc");
 
 		if (p1)
 		{
@@ -130,8 +131,8 @@ ecpg_filter_stderr(const char *resultfile, const char *tmpfile)
 		}
 
 		if (p3)
-		{			
-			char       *p4 = strstr(p3, "notice");
+		{
+			char	   *p4 = strstr(p3, "notice");
 
 			if (p4)
 			{
@@ -177,7 +178,7 @@ ecpg_start_test(const char *testname,
 				expectfile_source[MAXPGPATH];
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
-	bool 		is_no_source_check = false;
+	bool		is_no_source_check = false;
 
 	/* make a version of the test name that has dashes in place of slashes */
 	initStringInfo(&testname_dash);
@@ -196,16 +197,16 @@ ecpg_start_test(const char *testname,
 
 	if (is_no_source_check)
 	{
-		#ifdef WIN32
-			snprintf(inprg, sizeof(inprg), "%s/%s.bat", inputdir, testname);
-		#else
-			snprintf(inprg, sizeof(inprg), "%s/%s.sh", inputdir, testname);
-		#endif					
+#ifdef WIN32
+		snprintf(inprg, sizeof(inprg), "%s/%s.bat", inputdir, testname);
+#else
+		snprintf(inprg, sizeof(inprg), "%s/%s.sh", inputdir, testname);
+#endif
 	}
 	else
 	{
 		snprintf(inprg, sizeof(inprg), "%s/%s", inputdir, testname);
-		snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);		
+		snprintf(insource, sizeof(insource), "%s/%s.c", inputdir, testname);
 	}
 
 	snprintf(expectfile_stdout, sizeof(expectfile_stdout),
@@ -217,8 +218,8 @@ ecpg_start_test(const char *testname,
 	if (!is_no_source_check)
 	{
 		snprintf(expectfile_source, sizeof(expectfile_source),
-				"%s/expected/%s.c",
-				expecteddir, testname_dash.data);
+				 "%s/expected/%s.c",
+				 expecteddir, testname_dash.data);
 	}
 
 	snprintf(outfile_stdout, sizeof(outfile_stdout),
@@ -228,10 +229,10 @@ ecpg_start_test(const char *testname,
 			 "%s/results/%s.stderr",
 			 outputdir, testname_dash.data);
 	if (!is_no_source_check)
-	{	 
+	{
 		snprintf(outfile_source, sizeof(outfile_source),
-				"%s/results/%s.c",
-				outputdir, testname_dash.data);
+				 "%s/results/%s.c",
+				 outputdir, testname_dash.data);
 	}
 
 	add_stringlist_item(resultfiles, outfile_stdout);
@@ -243,10 +244,10 @@ ecpg_start_test(const char *testname,
 	add_stringlist_item(tags, "stderr");
 
 	if (!is_no_source_check)
-	{	
+	{
 		add_stringlist_item(resultfiles, outfile_source);
 		add_stringlist_item(expectfiles, expectfile_source);
-		add_stringlist_item(tags, "source");		
+		add_stringlist_item(tags, "source");
 
 		ecpg_filter_source(insource, outfile_source);
 	}
@@ -256,11 +257,11 @@ ecpg_start_test(const char *testname,
 	free(appnameenv);
 
 	snprintf(cmd, sizeof(cmd),
-			"\"%s\" >\"%s\" 2>\"%s\"",
-			inprg,
-			outfile_stdout,
-			outfile_stderr);
-	
+			 "\"%s\" >\"%s\" 2>\"%s\"",
+			 inprg,
+			 outfile_stdout,
+			 outfile_stderr);
+
 	pid = spawn_process(cmd);
 
 	if (pid == INVALID_PID)
