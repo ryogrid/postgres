@@ -18,9 +18,6 @@ TESTS = array_of_struct array_of_struct.c \
 	whenever_do_continue whenever_do_continue.c \
 	pointer_to_struct pointer_to_struct.c
 
-clean distclean:
-	rm -f notice.c notice_informix.c
-
 all: $(TESTS)
 
 array_of_struct.c: array_of_struct.pgc $(ECPG_TEST_DEPENDENCIES)
