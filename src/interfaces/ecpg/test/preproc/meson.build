@@ -1,5 +1,7 @@
 # Copyright (c) 2022-2025, PostgreSQL Global Development Group
 
+fs = import('fs')
+
 pgc_files = [
   'array_of_struct',
   'autoprep',
@@ -39,39 +41,29 @@ foreach pgc_file : pgc_files
 endforeach
 
 # copy materials for ecpg command notice test
+copy_materials = [
+  'notice.pgc',
+  'notice_informix.pgc',
+  'notice_check.bat',
+  'notice_check.sh',
+  'notice_informix_check.bat',
+  'notice_informix_check.sh',
+]
 
-notice_pgc = configure_file(
-    input: 'notice.pgc',
-    output: 'notice.pgc',
-    copy: true,
-)
+copy_cmdline = [
+  'python',
+  meson.current_source_dir() / 'copy_files.py',
+  meson.current_source_dir(),
+  meson.current_build_dir()
+]
 
-notice_informix_pgc = configure_file(
-    input: 'notice_informix.pgc',
-    output: 'notice_informix.pgc',
-    copy: true,
-)
+foreach file : copy_materials
+  copy_cmdline += file
+endforeach
 
-ecpg_wrapper_bat = configure_file(
-    input: 'notice_check.bat',
-    output: 'notice_check.bat',
-    copy: true,
-)
-
-ecpg_wrapper_bat = configure_file(
-    input: 'notice_check.sh',
-    output: 'notice_check.sh',
-    copy: true,
-)
-
-ecpg_wrapper_bat = configure_file(
-    input: 'notice_informix_check.bat',
-    output: 'notice_informix_check.bat',
-    copy: true,
-)
-
-ecpg_wrapper_bat = configure_file(
-    input: 'notice_informix_check.sh',
-    output: 'notice_informix_check.sh',
-    copy: true,
+ecpg_test_dependencies += custom_target('copy_ecpg_test_materials',
+  input: meson.current_source_dir() / 'copy_files.py',
+  output: copy_materials,
+  command: copy_cmdline,
+  build_by_default: false,
 )
