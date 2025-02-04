@@ -1,2 +1,2 @@
-notice_informix.pgc:11: ERROR: AT option not allowed in CLOSE DATABASE statement
-notice_informix.pgc:14: ERROR: "database" cannot be used as cursor name in INFORMIX mode
+notice_informix.pgc:12: ERROR: AT option not allowed in CLOSE DATABASE statement
+notice_informix.pgc:15: ERROR: "database" cannot be used as cursor name in INFORMIX mode

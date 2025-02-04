@@ -2,16 +2,17 @@
 
 #include <stdlib.h>
 
-EXEC SQL WHENEVER SQLERROR STOP;
-
 int
 main(void)
 {
+    /* For consistency with other tests */
+    $CONNECT TO testdb AS con1;
+
     /* Test AT option usage at CLOSE statement in INFORMIX mode */
-    EXEC SQL AT connection1 CLOSE database;
+    $AT con1 CLOSE database;
 
     /* Test cursor name errors in INFORMIX mode */
-    EXEC SQL DECLARE database CURSOR FOR SELECT * FROM test;
+    $DECLARE database CURSOR FOR SELECT * FROM test;
 
     return 0;
 }
