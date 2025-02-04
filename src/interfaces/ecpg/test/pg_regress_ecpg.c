@@ -115,7 +115,9 @@ ecpg_filter_stderr(const char *resultfile, const char *tmpfile)
 	while (pg_get_line_buf(s, &linebuf))
 	{
 		char	   *p1 = strstr(linebuf.data, "connection to server ");
-		
+		/* when ecpg command notice test*/
+		char 	   *p3 = strstr(linebuf.data, "preproc");
+
 		if (p1)
 		{
 			char	   *p2 = strstr(p1, "failed: ");
@@ -127,8 +129,6 @@ ecpg_filter_stderr(const char *resultfile, const char *tmpfile)
 			}
 		}
 
-		/* when ecpg command notice test*/
-		char 	   *p3 = strstr(linebuf.data, "preproc");
 		if (p3)
 		{			
 			char       *p4 = strstr(p3, "notice");
@@ -175,7 +175,6 @@ ecpg_start_test(const char *testname,
 				expectfile_stderr[MAXPGPATH];
 	char		outfile_source[MAXPGPATH],
 				expectfile_source[MAXPGPATH];
-	char		splited_testname[MAXPGPATH * 3] = "";
 	char		cmd[MAXPGPATH * 3];
 	char	   *appnameenv;
 	bool 		is_no_source_check = false;
