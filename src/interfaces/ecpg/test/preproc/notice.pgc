@@ -6,7 +6,7 @@ int
 main(void)
 {
     EXEC SQL BEGIN DECLARE SECTION;
-    char *cursor_var = "mycursor";    
+    char *cursor_var = "mycursor";
     short a;
     EXEC SQL END DECLARE SECTION;
 
@@ -23,17 +23,17 @@ main(void)
 
     /* Test COPY FROM STDIN warning */
     EXEC SQL COPY test FROM stdin;
-    
+
     /* Test same variable in multi declare statement */
     EXEC SQL DECLARE :cursor_var CURSOR FOR SELECT * FROM test;
     EXEC SQL DECLARE :cursor_var CURSOR FOR SELECT * FROM test;
 
-    /* Test duplicate cursor declarations */    
+    /* Test duplicate cursor declarations */
     EXEC SQL DECLARE duplicate_cursor CURSOR FOR SELECT * FROM test;
     EXEC SQL DECLARE duplicate_cursor CURSOR FOR SELECT * FROM test;
 
     /* Test SHOW ALL error */
-    EXEC SQL SHOW ALL;         
+    EXEC SQL SHOW ALL;
 
     /* Test deprecated LIMIT syntax warning */
     EXEC SQL SELECT * FROM test LIMIT 10, 5;

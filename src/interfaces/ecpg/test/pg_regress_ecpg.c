@@ -26,7 +26,7 @@
 
 /*
  * Tests whose prefix is ECPG_CMD_NOTICE_TEST_PREFIX check ecpg command's notice
- * such as error or warning. Not checking of compiled ECPG programs behavior. 
+ * such as error or warning. Not checking of compiled ECPG programs behavior.
  * So, we handle these tests differently.
  */
 
