@@ -2472,20 +2472,19 @@ BufferIsExclusiveLocked(Buffer buffer)
 {
 	BufferDesc *bufHdr;
 
+	Assert(BufferIsPinned(buffer));
+
 	if (BufferIsLocal(buffer))
 	{
-		int			bufid = -buffer - 1;
-
-		bufHdr = GetLocalBufferDescriptor(bufid);
+		/* Content locks are not maintained for local buffers. */
+		return true;
 	}
 	else
 	{
 		bufHdr = GetBufferDescriptor(buffer - 1);
+		return LWLockHeldByMeInMode(BufferDescriptorGetContentLock(bufHdr),
+									LW_EXCLUSIVE);
 	}
-
-	Assert(BufferIsPinned(buffer));
-	return LWLockHeldByMeInMode(BufferDescriptorGetContentLock(bufHdr),
-								LW_EXCLUSIVE);
 }
 
 /*
@@ -2501,20 +2500,21 @@ BufferIsDirty(Buffer buffer)
 {
 	BufferDesc *bufHdr;
 
+	Assert(BufferIsPinned(buffer));
+
 	if (BufferIsLocal(buffer))
 	{
 		int			bufid = -buffer - 1;
 
 		bufHdr = GetLocalBufferDescriptor(bufid);
+		/* Content locks are not maintained for local buffers. */
 	}
 	else
 	{
 		bufHdr = GetBufferDescriptor(buffer - 1);
+		Assert(LWLockHeldByMeInMode(BufferDescriptorGetContentLock(bufHdr),
+									LW_EXCLUSIVE));
 	}
-
-	Assert(BufferIsPinned(buffer));
-	Assert(LWLockHeldByMeInMode(BufferDescriptorGetContentLock(bufHdr),
-								LW_EXCLUSIVE));
 
 	return pg_atomic_read_u32(&bufHdr->state) & BM_DIRTY;
 }
@@ -4411,64 +4411,6 @@ DropDatabaseBuffers(Oid dbid)
 			UnlockBufHdr(bufHdr, buf_state);
 	}
 }
-
-/* -----------------------------------------------------------------
- *		PrintBufferDescs
- *
- *		this function prints all the buffer descriptors, for debugging
- *		use only.
- * -----------------------------------------------------------------
- */
-#ifdef NOT_USED
-void
-PrintBufferDescs(void)
-{
-	int			i;
-
-	for (i = 0; i < NBuffers; ++i)
-	{
-		BufferDesc *buf = GetBufferDescriptor(i);
-		Buffer		b = BufferDescriptorGetBuffer(buf);
-
-		/* theoretically we should lock the bufhdr here */
-		elog(LOG,
-			 "[%02d] (freeNext=%d, rel=%s, "
-			 "blockNum=%u, flags=0x%x, refcount=%u %d)",
-			 i, buf->freeNext,
-			 relpathbackend(BufTagGetRelFileLocator(&buf->tag),
-							INVALID_PROC_NUMBER, BufTagGetForkNum(&buf->tag)),
-			 buf->tag.blockNum, buf->flags,
-			 buf->refcount, GetPrivateRefCount(b));
-	}
-}
-#endif
-
-#ifdef NOT_USED
-void
-PrintPinnedBufs(void)
-{
-	int			i;
-
-	for (i = 0; i < NBuffers; ++i)
-	{
-		BufferDesc *buf = GetBufferDescriptor(i);
-		Buffer		b = BufferDescriptorGetBuffer(buf);
-
-		if (GetPrivateRefCount(b) > 0)
-		{
-			/* theoretically we should lock the bufhdr here */
-			elog(LOG,
-				 "[%02d] (freeNext=%d, rel=%s, "
-				 "blockNum=%u, flags=0x%x, refcount=%u %d)",
-				 i, buf->freeNext,
-				 relpathperm(BufTagGetRelFileLocator(&buf->tag),
-							 BufTagGetForkNum(&buf->tag)),
-				 buf->tag.blockNum, buf->flags,
-				 buf->refcount, GetPrivateRefCount(b));
-		}
-	}
-}
-#endif
 
 /* ---------------------------------------------------------------------
  *		FlushRelationBuffers

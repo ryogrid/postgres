@@ -574,8 +574,9 @@ static void createForeignKeyActionTriggers(Relation rel, Oid refRelOid,
 										   Oid indexOid,
 										   Oid parentDelTrigger, Oid parentUpdTrigger,
 										   Oid *deleteTrigOid, Oid *updateTrigOid);
-static bool tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
-										 Oid partRelid,
+static bool tryAttachPartitionForeignKey(List **wqueue,
+										 ForeignKeyCacheInfo *fk,
+										 Relation partition,
 										 Oid parentConstrOid, int numfks,
 										 AttrNumber *mapped_conkey, AttrNumber *confkey,
 										 Oid *conpfeqop,
@@ -9772,22 +9773,12 @@ ATAddForeignKeyConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	 * Validity checks (permission checks wait till we have the column
 	 * numbers)
 	 */
-	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
-	{
-		if (!recurse)
-			ereport(ERROR,
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("cannot use ONLY for foreign key on partitioned table \"%s\" referencing relation \"%s\"",
-							RelationGetRelationName(rel),
-							RelationGetRelationName(pkrel))));
-		if (fkconstraint->skip_validation && !fkconstraint->initially_valid)
-			ereport(ERROR,
-					(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-					 errmsg("cannot add NOT VALID foreign key on partitioned table \"%s\" referencing relation \"%s\"",
-							RelationGetRelationName(rel),
-							RelationGetRelationName(pkrel)),
-					 errdetail("This feature is not yet supported on partitioned tables.")));
-	}
+	if (!recurse && rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE)
+		ereport(ERROR,
+				errcode(ERRCODE_WRONG_OBJECT_TYPE),
+				errmsg("cannot use ONLY for foreign key on partitioned table \"%s\" referencing relation \"%s\"",
+					   RelationGetRelationName(rel),
+					   RelationGetRelationName(pkrel)));
 
 	if (pkrel->rd_rel->relkind != RELKIND_RELATION &&
 		pkrel->rd_rel->relkind != RELKIND_PARTITIONED_TABLE)
@@ -10011,37 +10002,21 @@ ATAddForeignKeyConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			CompareType cmptype;
 			bool		for_overlaps = with_period && i == numpks - 1;
 
-			/*
-			 * GiST indexes are required to support temporal foreign keys
-			 * because they combine equals and overlaps.
-			 */
-			if (amid != GIST_AM_OID)
-				elog(ERROR, "only GiST indexes are supported for temporal foreign keys");
-
 			cmptype = for_overlaps ? COMPARE_OVERLAP : COMPARE_EQ;
 
 			/*
-			 * An opclass can use whatever strategy numbers it wants, so we
-			 * ask the opclass what number it actually uses instead of our RT*
-			 * constants.
+			 * An index AM can use whatever strategy numbers it wants, so we
+			 * ask it what number it actually uses.
 			 */
-			eqstrategy = GistTranslateStratnum(opclasses[i], cmptype);
+			eqstrategy = IndexAmTranslateCompareType(cmptype, amid, opfamily, opcintype, true);
 			if (eqstrategy == InvalidStrategy)
-			{
-				HeapTuple	tuple;
-
-				tuple = SearchSysCache1(CLAOID, ObjectIdGetDatum(opclasses[i]));
-				if (!HeapTupleIsValid(tuple))
-					elog(ERROR, "cache lookup failed for operator class %u", opclasses[i]);
-
 				ereport(ERROR,
 						errcode(ERRCODE_UNDEFINED_OBJECT),
 						for_overlaps
 						? errmsg("could not identify an overlaps operator for foreign key")
 						: errmsg("could not identify an equality operator for foreign key"),
-						errdetail("Could not translate compare type %d for operator class \"%s\" for access method \"%s\".",
-								  cmptype, NameStr(((Form_pg_opclass) GETSTRUCT(tuple))->opcname), "gist"));
-			}
+						errdetail("Could not translate compare type %d for operator family \"%s\", input type %s, access method \"%s\".",
+								  cmptype, get_opfamily_name(opfamily, false), format_type_be(opcintype), get_am_name(amid)));
 		}
 		else
 		{
@@ -10050,7 +10025,7 @@ ATAddForeignKeyConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 			 * other index AMs support unique indexes.  If we ever did have
 			 * other types of unique indexes, we'd need a way to determine
 			 * which operator strategy number is equality.  (We could use
-			 * something like GistTranslateStratnum.)
+			 * IndexAmTranslateCompareType.)
 			 */
 			if (amid != BTREE_AM_OID)
 				elog(ERROR, "only b-tree indexes are supported for foreign keys");
@@ -10260,8 +10235,10 @@ ATAddForeignKeyConstraint(List **wqueue, AlteredTableInfo *tab, Relation rel,
 	{
 		Oid			periodoperoid;
 		Oid			aggedperiodoperoid;
+		Oid			intersectoperoid;
 
-		FindFKPeriodOpers(opclasses[numpks - 1], &periodoperoid, &aggedperiodoperoid);
+		FindFKPeriodOpers(opclasses[numpks - 1], &periodoperoid, &aggedperiodoperoid,
+						  &intersectoperoid);
 	}
 
 	/* First, create the constraint catalog entry itself. */
@@ -10780,14 +10757,12 @@ addFkRecurseReferencing(List **wqueue, Constraint *fkconstraint, Relation rel,
 		 */
 		for (int i = 0; i < pd->nparts; i++)
 		{
-			Oid			partitionId = pd->oids[i];
-			Relation	partition = table_open(partitionId, lockmode);
+			Relation	partition = table_open(pd->oids[i], lockmode);
 			List	   *partFKs;
 			AttrMap    *attmap;
 			AttrNumber	mapped_fkattnum[INDEX_MAX_KEYS];
 			bool		attached;
 			ObjectAddress address;
-			ListCell   *cell;
 
 			CheckAlterTableIsSafe(partition);
 
@@ -10800,13 +10775,11 @@ addFkRecurseReferencing(List **wqueue, Constraint *fkconstraint, Relation rel,
 			/* Check whether an existing constraint can be repurposed */
 			partFKs = copyObject(RelationGetFKeyList(partition));
 			attached = false;
-			foreach(cell, partFKs)
+			foreach_node(ForeignKeyCacheInfo, fk, partFKs)
 			{
-				ForeignKeyCacheInfo *fk;
-
-				fk = lfirst_node(ForeignKeyCacheInfo, cell);
-				if (tryAttachPartitionForeignKey(fk,
-												 partitionId,
+				if (tryAttachPartitionForeignKey(wqueue,
+												 fk,
+												 partition,
 												 parentConstr,
 												 numfks,
 												 mapped_fkattnum,
@@ -11258,8 +11231,9 @@ CloneFkReferencing(List **wqueue, Relation parentRel, Relation partRel)
 		{
 			ForeignKeyCacheInfo *fk = lfirst_node(ForeignKeyCacheInfo, lc);
 
-			if (tryAttachPartitionForeignKey(fk,
-											 RelationGetRelid(partRel),
+			if (tryAttachPartitionForeignKey(wqueue,
+											 fk,
+											 partRel,
 											 parentConstrOid,
 											 numfks,
 											 mapped_conkey,
@@ -11362,8 +11336,9 @@ CloneFkReferencing(List **wqueue, Relation parentRel, Relation partRel)
  * return false.
  */
 static bool
-tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
-							 Oid partRelid,
+tryAttachPartitionForeignKey(List **wqueue,
+							 ForeignKeyCacheInfo *fk,
+							 Relation partition,
 							 Oid parentConstrOid,
 							 int numfks,
 							 AttrNumber *mapped_conkey,
@@ -11377,6 +11352,7 @@ tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
 	Form_pg_constraint parentConstr;
 	HeapTuple	partcontup;
 	Form_pg_constraint partConstr;
+	bool		queueValidation;
 	ScanKeyData key;
 	SysScanDesc scan;
 	HeapTuple	trigtup;
@@ -11409,18 +11385,12 @@ tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
 		}
 	}
 
-	/*
-	 * Looks good so far; do some more extensive checks.  Presumably the check
-	 * for 'convalidated' could be dropped, since we don't really care about
-	 * that, but let's be careful for now.
-	 */
-	partcontup = SearchSysCache1(CONSTROID,
-								 ObjectIdGetDatum(fk->conoid));
+	/* Looks good so far; perform more extensive checks. */
+	partcontup = SearchSysCache1(CONSTROID, ObjectIdGetDatum(fk->conoid));
 	if (!HeapTupleIsValid(partcontup))
 		elog(ERROR, "cache lookup failed for constraint %u", fk->conoid);
 	partConstr = (Form_pg_constraint) GETSTRUCT(partcontup);
 	if (OidIsValid(partConstr->conparentid) ||
-		!partConstr->convalidated ||
 		partConstr->condeferrable != parentConstr->condeferrable ||
 		partConstr->condeferred != parentConstr->condeferred ||
 		partConstr->confupdtype != parentConstr->confupdtype ||
@@ -11431,6 +11401,13 @@ tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
 		ReleaseSysCache(partcontup);
 		return false;
 	}
+
+	/*
+	 * Will we need to validate this constraint?   A valid parent constraint
+	 * implies that all child constraints have been validated, so if this one
+	 * isn't, we must trigger phase 3 validation.
+	 */
+	queueValidation = parentConstr->convalidated && !partConstr->convalidated;
 
 	ReleaseSysCache(partcontup);
 	ReleaseSysCache(parentConstrTup);
@@ -11479,7 +11456,8 @@ tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
 
 	systable_endscan(scan);
 
-	ConstraintSetParentConstraint(fk->conoid, parentConstrOid, partRelid);
+	ConstraintSetParentConstraint(fk->conoid, parentConstrOid,
+								  RelationGetRelid(partition));
 
 	/*
 	 * Like the constraint, attach partition's "check" triggers to the
@@ -11490,10 +11468,10 @@ tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
 							   &insertTriggerOid, &updateTriggerOid);
 	Assert(OidIsValid(insertTriggerOid) && OidIsValid(parentInsTrigger));
 	TriggerSetParentTrigger(trigrel, insertTriggerOid, parentInsTrigger,
-							partRelid);
+							RelationGetRelid(partition));
 	Assert(OidIsValid(updateTriggerOid) && OidIsValid(parentUpdTrigger));
 	TriggerSetParentTrigger(trigrel, updateTriggerOid, parentUpdTrigger,
-							partRelid);
+							RelationGetRelid(partition));
 
 	/*
 	 * If the referenced table is partitioned, then the partition we're
@@ -11570,7 +11548,33 @@ tryAttachPartitionForeignKey(ForeignKeyCacheInfo *fk,
 		table_close(pg_constraint, RowShareLock);
 	}
 
+	/*
+	 * We updated this pg_constraint row above to set its parent; validating
+	 * it will cause its convalidated flag to change, so we need CCI here.  In
+	 * addition, we need it unconditionally for the rare case where the parent
+	 * table has *two* identical constraints; when reaching this function for
+	 * the second one, we must have made our changes visible, otherwise we
+	 * would try to attach both to this one.
+	 */
 	CommandCounterIncrement();
+
+	/* If validation is needed, put it in the queue now. */
+	if (queueValidation)
+	{
+		Relation	conrel;
+
+		conrel = table_open(ConstraintRelationId, RowExclusiveLock);
+		partcontup = SearchSysCache1(CONSTROID, ObjectIdGetDatum(fk->conoid));
+		if (!HeapTupleIsValid(partcontup))
+			elog(ERROR, "cache lookup failed for constraint %u", fk->conoid);
+
+		/* Use the same lock as for AT_ValidateConstraint */
+		QueueFKConstraintValidation(wqueue, conrel, partition, partcontup,
+									ShareUpdateExclusiveLock);
+		ReleaseSysCache(partcontup);
+		table_close(conrel, RowExclusiveLock);
+	}
+
 	return true;
 }
 
@@ -12111,7 +12115,7 @@ ATExecValidateConstraint(List **wqueue, Relation rel, char *constrName,
  *
  * Add an entry to the wqueue to validate the given foreign key constraint in
  * Phase 3 and update the convalidated field in the pg_constraint catalog
- * for the specified relation.
+ * for the specified relation and all its children.
  */
 static void
 QueueFKConstraintValidation(List **wqueue, Relation conrel, Relation rel,
@@ -12124,6 +12128,7 @@ QueueFKConstraintValidation(List **wqueue, Relation conrel, Relation rel,
 
 	con = (Form_pg_constraint) GETSTRUCT(contuple);
 	Assert(con->contype == CONSTRAINT_FOREIGN);
+	Assert(!con->convalidated);
 
 	if (rel->rd_rel->relkind == RELKIND_RELATION)
 	{
@@ -12149,9 +12154,48 @@ QueueFKConstraintValidation(List **wqueue, Relation conrel, Relation rel,
 	}
 
 	/*
-	 * We disallow creating invalid foreign keys to or from partitioned
-	 * tables, so ignoring the recursion bit is okay.
+	 * If the table at either end of the constraint is partitioned, we need to
+	 * recurse and handle every constraint that is a child of this constraint.
 	 */
+	if (rel->rd_rel->relkind == RELKIND_PARTITIONED_TABLE ||
+		get_rel_relkind(con->confrelid) == RELKIND_PARTITIONED_TABLE)
+	{
+		ScanKeyData pkey;
+		SysScanDesc pscan;
+		HeapTuple	childtup;
+
+		ScanKeyInit(&pkey,
+					Anum_pg_constraint_conparentid,
+					BTEqualStrategyNumber, F_OIDEQ,
+					ObjectIdGetDatum(con->oid));
+
+		pscan = systable_beginscan(conrel, ConstraintParentIndexId,
+								   true, NULL, 1, &pkey);
+
+		while (HeapTupleIsValid(childtup = systable_getnext(pscan)))
+		{
+			Form_pg_constraint childcon;
+			Relation	childrel;
+
+			childcon = (Form_pg_constraint) GETSTRUCT(childtup);
+
+			/*
+			 * If the child constraint has already been validated, no further
+			 * action is required for it or its descendants, as they are all
+			 * valid.
+			 */
+			if (childcon->convalidated)
+				continue;
+
+			childrel = table_open(childcon->conrelid, lockmode);
+
+			QueueFKConstraintValidation(wqueue, conrel, childrel, childtup,
+										lockmode);
+			table_close(childrel, NoLock);
+		}
+
+		systable_endscan(pscan);
+	}
 
 	/*
 	 * Now update the catalog, while we have the door open.
@@ -13350,10 +13394,13 @@ ATPrepAlterColumnType(List **wqueue,
 	AclResult	aclresult;
 	bool		is_expr;
 
+	pstate->p_sourcetext = context->queryString;
+
 	if (rel->rd_rel->reloftype && !recursing)
 		ereport(ERROR,
 				(errcode(ERRCODE_WRONG_OBJECT_TYPE),
-				 errmsg("cannot alter column type of typed table")));
+				 errmsg("cannot alter column type of typed table"),
+				 parser_errposition(pstate, def->location)));
 
 	/* lookup the attribute so we can check inheritance status */
 	tuple = SearchSysCacheAttName(RelationGetRelid(rel), colName);
@@ -13361,7 +13408,8 @@ ATPrepAlterColumnType(List **wqueue,
 		ereport(ERROR,
 				(errcode(ERRCODE_UNDEFINED_COLUMN),
 				 errmsg("column \"%s\" of relation \"%s\" does not exist",
-						colName, RelationGetRelationName(rel))));
+						colName, RelationGetRelationName(rel)),
+				 parser_errposition(pstate, def->location)));
 	attTup = (Form_pg_attribute) GETSTRUCT(tuple);
 	attnum = attTup->attnum;
 
@@ -13369,8 +13417,8 @@ ATPrepAlterColumnType(List **wqueue,
 	if (attnum <= 0)
 		ereport(ERROR,
 				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				 errmsg("cannot alter system column \"%s\"",
-						colName)));
+				 errmsg("cannot alter system column \"%s\"", colName),
+				 parser_errposition(pstate, def->location)));
 
 	/*
 	 * Cannot specify USING when altering type of a generated column, because
@@ -13380,7 +13428,8 @@ ATPrepAlterColumnType(List **wqueue,
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_COLUMN_DEFINITION),
 				 errmsg("cannot specify USING when altering type of generated column"),
-				 errdetail("Column \"%s\" is a generated column.", colName)));
+				 errdetail("Column \"%s\" is a generated column.", colName),
+				 parser_errposition(pstate, def->location)));
 
 	/*
 	 * Don't alter inherited columns.  At outer level, there had better not be
@@ -13390,8 +13439,8 @@ ATPrepAlterColumnType(List **wqueue,
 	if (attTup->attinhcount > 0 && !recursing)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-				 errmsg("cannot alter inherited column \"%s\"",
-						colName)));
+				 errmsg("cannot alter inherited column \"%s\"", colName),
+				 parser_errposition(pstate, def->location)));
 
 	/* Don't alter columns used in the partition key */
 	if (has_partition_attrs(rel,
@@ -13400,17 +13449,18 @@ ATPrepAlterColumnType(List **wqueue,
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				 errmsg("cannot alter column \"%s\" because it is part of the partition key of relation \"%s\"",
-						colName, RelationGetRelationName(rel))));
+						colName, RelationGetRelationName(rel)),
+				 parser_errposition(pstate, def->location)));
 
 	/* Look up the target type */
-	typenameTypeIdAndMod(NULL, typeName, &targettype, &targettypmod);
+	typenameTypeIdAndMod(pstate, typeName, &targettype, &targettypmod);
 
 	aclresult = object_aclcheck(TypeRelationId, targettype, GetUserId(), ACL_USAGE);
 	if (aclresult != ACLCHECK_OK)
 		aclcheck_error_type(aclresult, targettype);
 
 	/* And the collation */
-	targetcollid = GetColumnDefCollation(NULL, def, targettype);
+	targetcollid = GetColumnDefCollation(pstate, def, targettype);
 
 	/* make sure datatype is legal for a column */
 	CheckAttributeType(colName, targettype, targetcollid,
@@ -19985,6 +20035,7 @@ DetachPartitionFinalize(Relation rel, Relation partRel, bool concurrent,
 	HeapTuple	tuple,
 				newtuple;
 	Relation	trigrel = NULL;
+	List	   *fkoids = NIL;
 
 	if (concurrent)
 	{
@@ -20005,6 +20056,23 @@ DetachPartitionFinalize(Relation rel, Relation partRel, bool concurrent,
 	fks = copyObject(RelationGetFKeyList(partRel));
 	if (fks != NIL)
 		trigrel = table_open(TriggerRelationId, RowExclusiveLock);
+
+	/*
+	 * It's possible that the partition being detached has a foreign key that
+	 * references a partitioned table.  When that happens, there are multiple
+	 * pg_constraint rows for the partition: one points to the partitioned
+	 * table itself, while the others point to each of its partitions.  Only
+	 * the topmost one is to be considered here; the child constraints must be
+	 * left alone, because conceptually those aren't coming from our parent
+	 * partitioned table, but from this partition itself.
+	 *
+	 * We implement this by collecting all the constraint OIDs in a first scan
+	 * of the FK array, and skipping in the loop below those constraints whose
+	 * parents are listed here.
+	 */
+	foreach_node(ForeignKeyCacheInfo, fk, fks)
+		fkoids = lappend_oid(fkoids, fk->conoid);
+
 	foreach(cell, fks)
 	{
 		ForeignKeyCacheInfo *fk = lfirst(cell);
@@ -20018,9 +20086,13 @@ DetachPartitionFinalize(Relation rel, Relation partRel, bool concurrent,
 			elog(ERROR, "cache lookup failed for constraint %u", fk->conoid);
 		conform = (Form_pg_constraint) GETSTRUCT(contup);
 
-		/* consider only the inherited foreign keys */
+		/*
+		 * Consider only inherited foreign keys, and only if their parents
+		 * aren't in the list.
+		 */
 		if (conform->contype != CONSTRAINT_FOREIGN ||
-			!OidIsValid(conform->conparentid))
+			!OidIsValid(conform->conparentid) ||
+			list_member_oid(fkoids, conform->conparentid))
 		{
 			ReleaseSysCache(contup);
 			continue;

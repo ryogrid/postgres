@@ -229,6 +229,23 @@ typedef struct ReplicationSlotCtlData
 } ReplicationSlotCtlData;
 
 /*
+ * Set slot's inactive_since property unless it was previously invalidated.
+ */
+static inline void
+ReplicationSlotSetInactiveSince(ReplicationSlot *s, TimestampTz ts,
+								bool acquire_lock)
+{
+	if (acquire_lock)
+		SpinLockAcquire(&s->mutex);
+
+	if (s->data.invalidated == RS_INVAL_NONE)
+		s->inactive_since = ts;
+
+	if (acquire_lock)
+		SpinLockRelease(&s->mutex);
+}
+
+/*
  * Pointers to shared memory
  */
 extern PGDLLIMPORT ReplicationSlotCtlData *ReplicationSlotCtl;
@@ -253,7 +270,8 @@ extern void ReplicationSlotDropAcquired(void);
 extern void ReplicationSlotAlter(const char *name, const bool *failover,
 								 const bool *two_phase);
 
-extern void ReplicationSlotAcquire(const char *name, bool nowait);
+extern void ReplicationSlotAcquire(const char *name, bool nowait,
+								   bool error_if_invalid);
 extern void ReplicationSlotRelease(void);
 extern void ReplicationSlotCleanup(bool synced_only);
 extern void ReplicationSlotSave(void);

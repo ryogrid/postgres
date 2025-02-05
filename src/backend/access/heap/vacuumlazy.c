@@ -386,13 +386,15 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 	if (instrument)
 	{
 		pg_rusage_init(&ru0);
-		starttime = GetCurrentTimestamp();
 		if (track_io_timing)
 		{
 			startreadtime = pgStatBlockReadTime;
 			startwritetime = pgStatBlockWriteTime;
 		}
 	}
+
+	/* Used for instrumentation and stats report */
+	starttime = GetCurrentTimestamp();
 
 	pgstat_progress_start_command(PROGRESS_COMMAND_VACUUM,
 								  RelationGetRelid(rel));
@@ -659,7 +661,8 @@ heap_vacuum_rel(Relation rel, VacuumParams *params,
 						 rel->rd_rel->relisshared,
 						 Max(vacrel->new_live_tuples, 0),
 						 vacrel->recently_dead_tuples +
-						 vacrel->missed_dead_tuples);
+						 vacrel->missed_dead_tuples,
+						 starttime);
 	pgstat_progress_end_command();
 
 	if (instrument)
@@ -2067,7 +2070,7 @@ lazy_vacuum(LVRelState *vacrel)
 		 */
 		threshold = (double) vacrel->rel_pages * BYPASS_THRESHOLD_PAGES;
 		bypass = (vacrel->lpdead_item_pages < threshold &&
-				  (TidStoreMemoryUsage(vacrel->dead_items) < (32L * 1024L * 1024L)));
+				  TidStoreMemoryUsage(vacrel->dead_items) < 32 * 1024 * 1024);
 	}
 
 	if (bypass)
@@ -3034,7 +3037,7 @@ dead_items_alloc(LVRelState *vacrel, int nworkers)
 	 */
 
 	dead_items_info = (VacDeadItemsInfo *) palloc(sizeof(VacDeadItemsInfo));
-	dead_items_info->max_bytes = vac_work_mem * 1024L;
+	dead_items_info->max_bytes = vac_work_mem * (Size) 1024;
 	dead_items_info->num_items = 0;
 	vacrel->dead_items_info = dead_items_info;
 
