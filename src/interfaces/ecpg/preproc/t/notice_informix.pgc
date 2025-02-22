@@ -1,0 +1,18 @@
+/* Test ECPG notice/warning/error messages */
+
+#include <stdlib.h>
+
+int
+main(void)
+{
+    /* For consistency with other tests */
+    $CONNECT TO testdb AS con1;
+
+    /* Test AT option usage at CLOSE statement in INFORMIX mode */
+    $AT con1 CLOSE database;
+
+    /* Test cursor name errors in INFORMIX mode */
+    $DECLARE database CURSOR FOR SELECT * FROM test;
+
+    return 0;
+}
