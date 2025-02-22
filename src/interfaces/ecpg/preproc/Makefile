@@ -97,4 +97,3 @@ clean distclean:
 	rm -f *.o ecpg$(X)
 	rm -f typename.c
 	rm -f preproc.y preproc.c preproc.h pgc.c c_kwlist_d.h ecpg_kwlist_d.h
-	rm -f notice.c notice_informix.c
