@@ -12,7 +12,7 @@ program_options_handling_ok('ecpg');
 command_fails(['ecpg'], 'ecpg without arguments fails');
 
 command_checks_all(
-	[ 'ecpg', 't/notice_informix.pgc' ],
+	[ 'ecpg', '-C', 'INFORMIX', 't/notice_informix.pgc' ],
 	3,
 	[qr//],
 	[
