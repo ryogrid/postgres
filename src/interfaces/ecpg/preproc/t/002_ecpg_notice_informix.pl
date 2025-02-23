@@ -19,6 +19,6 @@ command_checks_all(
 		qr/ERROR: AT option not allowed in CLOSE DATABASE statement/,
 		qr/ERROR: "database" cannot be used as cursor name in INFORMIX mode/
 	],
-	'ecpg with warnings');
+	'ecpg with errors');
 
 done_testing();

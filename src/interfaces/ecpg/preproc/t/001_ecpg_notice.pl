@@ -32,6 +32,6 @@ command_checks_all(
 		qr/WARNING: cursor ":cursor_var" has been declared but not opened/,
 		qr/WARNING: cursor ":cursor_var" has been declared but not opened/
 	],
-	'ecpg with warnings');
+	'ecpg with erros and warnings');
 
 done_testing();

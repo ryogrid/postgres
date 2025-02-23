@@ -86,3 +86,16 @@ ecpg_exe = executable('ecpg',
 ecpg_targets += ecpg_exe
 
 subdir('po', if_found: libintl)
+
+tests += {
+  'name': 'ecpg',
+  'sd': meson.current_source_dir(),
+  'bd': meson.current_build_dir(),
+  'tap': {
+    'tests': [
+      't/001_ecpg_notice.pl',
+      't/002_ecpg_notice_informix.pl',
+    ],
+    'deps': ecpg_exe,
+  },
+}
