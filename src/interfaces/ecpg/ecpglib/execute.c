@@ -2294,3 +2294,92 @@ ECPGdo_descriptor(int line, const char *connection,
 				  ECPGt_descriptor, descriptor, 0L, 0L, 0L,
 				  ECPGt_NO_INDICATOR, NULL, 0L, 0L, 0L, ECPGt_EORT);
 }
+
+/*
+ * ECPGcopy_from_stdin - Executes a COPY FROM STDIN command
+ * 
+ * This function handles the COPY FROM STDIN protocol with the server.
+ * It issues the COPY command, reads data from stdin until EOF marker (\.)
+ * and sends it to the server.
+ */
+bool
+ECPGcopy_from_stdin(int lineno, const char *connection_name, 
+                    const char *table, const char *column_list)
+{
+    struct connection *con = ecpg_get_connection(connection_name);
+    PGresult *res;
+    char copy_cmd[8192];
+    char buffer[8192];
+    bool success = true;
+    struct sqlca_t *sqlca = ECPGget_sqlca();
+
+    if (!ecpg_init(con, connection_name, lineno))
+        return false;
+
+    ecpg_log("ECPGcopy_from_stdin on line %d: table \"%s\"; connection \"%s\"\n", 
+             lineno, table, con ? con->name : "null");
+
+    /* Construct COPY command */
+    if (column_list && strlen(column_list) > 0)
+	{
+        sprintf(copy_cmd, "COPY %s (%s) FROM STDIN", table, column_list);
+	}
+    else
+	{
+        sprintf(copy_cmd, "COPY %s FROM STDIN", table);
+	}
+
+    /* Issue COPY command */
+    res = PQexec(con->connection, copy_cmd);
+    //free(copy_cmd);
+    
+    if (PQresultStatus(res) != PGRES_COPY_IN)
+    {
+        ecpg_raise(lineno, ECPG_PGSQL, ECPG_SQLSTATE_ECPG_INTERNAL_ERROR, 
+                   PQerrorMessage(con->connection));
+        PQclear(res);
+        return false;
+    }
+
+    /* Inform user about expected input format */
+    printf("Enter data to be copied followed by a newline.\n"
+           "End with a backslash and a period on a line by itself (\\.).\n");
+
+    /* Get data from stdin and copy it */
+    while (fgets(buffer, sizeof(buffer), stdin) != NULL)
+    {
+        /* Check for end marker (\.) */
+        if (strcmp(buffer, "\\.\n") == 0 || strcmp(buffer, "\\.\r\n") == 0)
+            break;
+            
+        /* Send data */
+        if (PQputCopyData(con->connection, buffer, strlen(buffer)) != 1)
+        {
+            ecpg_raise(lineno, ECPG_PGSQL, ECPG_SQLSTATE_ECPG_INTERNAL_ERROR, 
+                       PQerrorMessage(con->connection));
+            success = false;
+            break;
+        }
+    }
+    
+    /* Finish COPY operation */
+    if (success && PQputCopyEnd(con->connection, NULL) != 1)
+    {
+        ecpg_raise(lineno, ECPG_PGSQL, ECPG_SQLSTATE_ECPG_INTERNAL_ERROR, 
+                   PQerrorMessage(con->connection));
+        success = false;
+    }
+    
+    /* Get result of the COPY command */
+    PQclear(res);
+    res = PQgetResult(con->connection);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        ecpg_raise(lineno, ECPG_PGSQL, ECPG_SQLSTATE_ECPG_INTERNAL_ERROR, 
+                   PQerrorMessage(con->connection));
+        success = false;
+    }
+    
+    PQclear(res);
+    return success;
+}

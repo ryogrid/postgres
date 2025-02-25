@@ -240,19 +240,27 @@ ECPG: block where_or_current_clause WHERE CURRENT_P OF cursor_name
 		@$ = cat_str(2, "where current of", cursor_marker);
 	}
 ECPG: addon CopyStmt COPY opt_binary qualified_name opt_column_list copy_from opt_program copy_file_name copy_delimiter opt_with copy_options where_clause
+	{
 		if (strcmp(@5, "from") == 0 && 
 			strcmp(@7, "stdin") == 0)
 		{
 			/* handle COPY FROM STDIN */
-        	fprintf(base_yyout, "{ ECPGcopy_from_stdin(");
-			/* if there is a column list, we need to pass it */
-        	fprintf(base_yyout, ");\n");
+			/* Get column list if it exists */
+			char *col_list = strcmp(@4, "") ? @4 : "NULL";
+			
+			/* Output ECPGcopy_from_stdin function call with proper arguments */
+			fprintf(base_yyout, "{ ECPGcopy_from_stdin(__LINE__, %s, \"%s\", %s); }", 
+				connection ? connection : "NULL", 
+				@3,
+				col_list);
+			whenever_action(2);
 		}
-		else if (strcmp(@5, "from") == 0 &&
-				strcmp(@7, "stdin") == 0)
+		else if (strcmp(@5, "from") == 0 && 
+			strcmp(@7, "stout") == 0)
 		{
-			mmerror(PARSE_ERROR, ET_WARNING, "COPY FROM STDIN is not implemented");
+			mmerror(PARSE_ERROR, ET_ERROR, "COPY FROM STDOUT is not proper syntax");
 		}
+	}
 ECPG: addon var_value NumericOnly
 		if (@1[0] == '$')
 			@$ = "$0";
