@@ -67,6 +67,8 @@ bool		ECPGdescribe(int line, int compat, bool input,
 void		ECPGset_var(int number, void *pointer, int lineno);
 void	   *ECPGget_var(int number);
 
+bool 		ECPGcopy_from_stdin(const char *table, const char *column_list, bool csv_mode);
+
 /* dynamic result allocation */
 void		ECPGfree_auto_mem(void);
 

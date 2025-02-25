@@ -1608,6 +1608,11 @@ cppline			{space}*#([^i][A-Za-z]*|{if}|{ifdef}|{ifndef}|{import})((\/\*[^*/]*\*+
 					mmfatal(PARSE_ERROR, "internal error: unreachable state; please report this to <%s>", PACKAGE_BUGREPORT);
 				}
 
+"COPY"[ \t\n]+"FROM"[ \t\n]+"STDIN" {
+    /* COPY FROM STDIN を処理するコードを追加 */
+    return COPY_FROM_STDIN;
+}
+
 %%
 
 /* LCOV_EXCL_STOP */
