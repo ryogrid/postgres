@@ -195,6 +195,9 @@ static const internalPQconninfoOption PQconninfoOptions[] = {
 		"Database-Service", "", 20,
 	offsetof(struct pg_conn, pgservice)},
 
+	{"servicefile", "PGSERVICEFILE", NULL, NULL,
+	"Database-Service-File", "", 64, -1},
+
 	{"user", "PGUSER", NULL, NULL,
 		"Database-User", "", 20,
 	offsetof(struct pg_conn, pguser)},
@@ -5838,6 +5841,7 @@ static int
 parseServiceInfo(PQconninfoOption *options, PQExpBuffer errorMessage)
 {
 	const char *service = conninfo_getval(options, "service");
+	const char *service_fname = conninfo_getval(options, "servicefile");
 	char		serviceFile[MAXPGPATH];
 	char	   *env;
 	bool		group_found = false;
@@ -5860,7 +5864,9 @@ parseServiceInfo(PQconninfoOption *options, PQExpBuffer errorMessage)
 	 * Try PGSERVICEFILE if specified, else try ~/.pg_service.conf (if that
 	 * exists).
 	 */
-	if ((env = getenv("PGSERVICEFILE")) != NULL)
+	if (service_fname != NULL)
+		strlcpy(serviceFile, service_fname, sizeof(serviceFile));
+	else if ((env = getenv("PGSERVICEFILE")) != NULL)
 		strlcpy(serviceFile, env, sizeof(serviceFile));
 	else
 	{
@@ -6017,6 +6023,16 @@ parseServiceFile(const char *serviceFile,
 				{
 					libpq_append_error(errorMessage,
 									   "nested service specifications not supported in service file \"%s\", line %d",
+									   serviceFile,
+									   linenr);
+					result = 3;
+					goto exit;
+				}
+
+				if (strcmp(key, "servicefile") == 0)
+				{
+					libpq_append_error(errorMessage,
+									   "nested servicefile specifications not supported in service file \"%s\", line %d",
 									   serviceFile,
 									   linenr);
 					result = 3;
