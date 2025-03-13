@@ -1897,7 +1897,8 @@ ReorderBufferCopySnap(ReorderBuffer *rb, Snapshot orig_snap,
 
 	size = sizeof(SnapshotData) +
 		sizeof(TransactionId) * orig_snap->xcnt +
-		sizeof(TransactionId) * (txn->nsubtxns + 1);
+		sizeof(TransactionId) * (txn->nsubtxns + 1) +
+		sizeof(TransactionId) * orig_snap->x2pc_cnt;
 
 	snap = MemoryContextAllocZero(rb->context, size);
 	memcpy(snap, orig_snap, sizeof(SnapshotData));
@@ -1908,6 +1909,9 @@ ReorderBufferCopySnap(ReorderBuffer *rb, Snapshot orig_snap,
 	snap->xip = (TransactionId *) (snap + 1);
 
 	memcpy(snap->xip, orig_snap->xip, sizeof(TransactionId) * snap->xcnt);
+
+	snap->x2pc = snap->xip + snap->xcnt + (txn->nsubtxns + 1);
+	memcpy(snap->x2pc, orig_snap->x2pc, sizeof(TransactionId) * snap->x2pc_cnt);
 
 	/*
 	 * snap->subxip contains all txids that belong to our transaction which we

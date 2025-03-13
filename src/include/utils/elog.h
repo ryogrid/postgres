@@ -236,6 +236,11 @@ extern int	getinternalerrposition(void);
  *		elog(ERROR, "portal \"%s\" not found", stmt->portalname);
  *----------
  */
+#ifdef USE_ASSERT_CHECKING
+#define wlog elog
+#else
+#define wlog(...) ((void) 0)	/* Do nothing */
+#endif
 #define elog(elevel, ...)  \
 	ereport(elevel, errmsg_internal(__VA_ARGS__))
 

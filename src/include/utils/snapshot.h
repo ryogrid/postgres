@@ -155,14 +155,24 @@ typedef struct SnapshotData
 
 	/*
 	 * For normal MVCC snapshot this contains the all xact IDs that are in
-	 * progress, unless the snapshot was taken during recovery in which case
-	 * it's empty. For historic MVCC snapshots, the meaning is inverted, i.e.
-	 * it contains *committed* transactions between xmin and xmax.
+	 * progress but not prepared, unless the snapshot was taken during
+	 * recovery in which case it's empty. For historic MVCC snapshots, the
+	 * meaning is inverted, i.e. it contains *committed* transactions between
+	 * xmin and xmax.
 	 *
 	 * note: all ids in xip[] satisfy xmin <= xip[i] < xmax
 	 */
 	TransactionId *xip;
 	uint32		xcnt;			/* # of xact ids in xip[] */
+
+	/*
+	 * This contains the all xact IDs that are prepared when GetSnapshotData()
+	 * is called.
+	 *
+	 * note: all ids in x2pc[] satisfy xmin <= x2pc[i] < xmax
+	 */
+	TransactionId *x2pc;
+	uint32		x2pc_cnt;		/* # of xact ids in x2pc[] */
 
 	/*
 	 * For non-historic MVCC snapshots, this contains subxact IDs that are in

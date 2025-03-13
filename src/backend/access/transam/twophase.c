@@ -229,6 +229,7 @@ static void MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid,
 								Oid databaseid);
 static void RemoveTwoPhaseFile(TransactionId xid, bool giveWarning);
 static void RecreateTwoPhaseFile(TransactionId xid, void *content, int len);
+static inline FullTransactionId AdjustToFullTransactionId(TransactionId xid);
 
 /*
  * Initialization of shared memory
@@ -462,7 +463,11 @@ MarkAsPreparingGuts(GlobalTransaction gxact, TransactionId xid, const char *gid,
 	Assert(proc->xmin == InvalidTransactionId);
 	proc->delayChkptFlags = 0;
 	proc->statusFlags = 0;
+	LWLockAcquire(ProcArrayLock, LW_EXCLUSIVE);
 	proc->pid = 0;
+	if (TransactionIdPrecedes(XidFromFullTransactionId(TransamVariables->latestCompletedXid), xid))
+		TransamVariables->latestCompletedXid = AdjustToFullTransactionId(xid);
+	LWLockRelease(ProcArrayLock);
 	proc->databaseId = databaseid;
 	proc->roleId = owner;
 	proc->tempNamespaceId = InvalidOid;

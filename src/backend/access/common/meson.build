@@ -1,6 +1,7 @@
 # Copyright (c) 2022-2025, PostgreSQL Global Development Group
 
 backend_sources += files(
+  'atomic_visibility.c',
   'attmap.c',
   'bufmask.c',
   'detoast.c',

@@ -107,6 +107,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include "access/atomic_visibility.h"
 #include "access/subtrans.h"
 #include "access/transam.h"
 #include "access/xact.h"
@@ -253,6 +254,7 @@ typedef struct SerializedSnapshotData
 	TransactionId xmax;
 	uint32		xcnt;
 	int32		subxcnt;
+	uint32		x2pc_cnt;
 	bool		suboverflowed;
 	bool		takenDuringRecovery;
 	CommandId	curcid;
@@ -602,7 +604,8 @@ CopySnapshot(Snapshot snapshot)
 
 	/* We allocate any XID arrays needed in the same palloc block. */
 	size = subxipoff = sizeof(SnapshotData) +
-		snapshot->xcnt * sizeof(TransactionId);
+		snapshot->xcnt * sizeof(TransactionId) +
+		snapshot->x2pc_cnt * sizeof(TransactionId);
 	if (snapshot->subxcnt > 0)
 		size += snapshot->subxcnt * sizeof(TransactionId);
 
@@ -623,6 +626,15 @@ CopySnapshot(Snapshot snapshot)
 	}
 	else
 		newsnap->xip = NULL;
+
+	if (snapshot->x2pc_cnt > 0)
+	{
+		newsnap->x2pc = (TransactionId *) (newsnap + 1) + snapshot->xcnt;
+		memcpy(newsnap->x2pc, snapshot->x2pc,
+			   snapshot->x2pc_cnt * sizeof(TransactionId));
+	}
+	else
+		newsnap->x2pc = NULL;
 
 	/*
 	 * Setup subXID array. Don't bother to copy it if it had overflowed,
@@ -1710,6 +1722,8 @@ EstimateSnapshotSpace(Snapshot snapshot)
 		(!snapshot->suboverflowed || snapshot->takenDuringRecovery))
 		size = add_size(size,
 						mul_size(snapshot->subxcnt, sizeof(TransactionId)));
+	size = add_size(size,
+					mul_size(snapshot->x2pc_cnt, sizeof(TransactionId)));
 
 	return size;
 }
@@ -1731,6 +1745,7 @@ SerializeSnapshot(Snapshot snapshot, char *start_address)
 	serialized_snapshot.xmax = snapshot->xmax;
 	serialized_snapshot.xcnt = snapshot->xcnt;
 	serialized_snapshot.subxcnt = snapshot->subxcnt;
+	serialized_snapshot.x2pc_cnt = snapshot->x2pc_cnt;
 	serialized_snapshot.suboverflowed = snapshot->suboverflowed;
 	serialized_snapshot.takenDuringRecovery = snapshot->takenDuringRecovery;
 	serialized_snapshot.curcid = snapshot->curcid;
@@ -1767,6 +1782,16 @@ SerializeSnapshot(Snapshot snapshot, char *start_address)
 		memcpy((TransactionId *) (start_address + subxipoff),
 			   snapshot->subxip, snapshot->subxcnt * sizeof(TransactionId));
 	}
+
+	/* Copy x2pc array */
+	if (snapshot->x2pc_cnt > 0)
+	{
+		Size		x2pcoff = sizeof(SerializedSnapshotData) +
+			(snapshot->xcnt + snapshot->subxcnt) * sizeof(TransactionId);
+
+		memcpy((TransactionId *) (start_address + x2pcoff),
+			   snapshot->x2pc, snapshot->x2pc_cnt * sizeof(TransactionId));
+	}
 }
 
 /*
@@ -1792,7 +1817,8 @@ RestoreSnapshot(char *start_address)
 	/* We allocate any XID arrays needed in the same palloc block. */
 	size = sizeof(SnapshotData)
 		+ serialized_snapshot.xcnt * sizeof(TransactionId)
-		+ serialized_snapshot.subxcnt * sizeof(TransactionId);
+		+ serialized_snapshot.subxcnt * sizeof(TransactionId)
+		+ serialized_snapshot.x2pc_cnt * sizeof(TransactionId);
 
 	/* Copy all required fields */
 	snapshot = (Snapshot) MemoryContextAlloc(TopTransactionContext, size);
@@ -1803,6 +1829,8 @@ RestoreSnapshot(char *start_address)
 	snapshot->xcnt = serialized_snapshot.xcnt;
 	snapshot->subxip = NULL;
 	snapshot->subxcnt = serialized_snapshot.subxcnt;
+	snapshot->x2pc = NULL;
+	snapshot->x2pc_cnt = serialized_snapshot.x2pc_cnt;
 	snapshot->suboverflowed = serialized_snapshot.suboverflowed;
 	snapshot->takenDuringRecovery = serialized_snapshot.takenDuringRecovery;
 	snapshot->curcid = serialized_snapshot.curcid;
@@ -1823,6 +1851,16 @@ RestoreSnapshot(char *start_address)
 			serialized_snapshot.xcnt;
 		memcpy(snapshot->subxip, serialized_xids + serialized_snapshot.xcnt,
 			   serialized_snapshot.subxcnt * sizeof(TransactionId));
+	}
+
+	/* Copy x2pcs, if present. */
+	if (serialized_snapshot.x2pc_cnt > 0)
+	{
+		snapshot->x2pc = ((TransactionId *) (snapshot + 1)) +
+			(serialized_snapshot.xcnt + serialized_snapshot.subxcnt);
+		memcpy(snapshot->subxip,
+			   serialized_xids + serialized_snapshot.xcnt + serialized_snapshot.subxcnt,
+			   serialized_snapshot.x2pc_cnt * sizeof(TransactionId));
 	}
 
 	/* Set the copied flag so that the caller will set refcounts correctly. */
@@ -1872,6 +1910,11 @@ XidInMVCCSnapshot(TransactionId xid, Snapshot snapshot)
 	/* Any xid >= xmax is in-progress */
 	if (TransactionIdFollowsOrEquals(xid, snapshot->xmax))
 		return true;
+
+	/*
+	 * Wait for prepared transactions to ensure atomic visibility.
+	 */
+	WaitForPreparedXactsInSnapshot(xid, snapshot);
 
 	/*
 	 * Snapshot information is stored slightly differently in snapshots taken

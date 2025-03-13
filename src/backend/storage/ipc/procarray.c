@@ -2179,6 +2179,7 @@ GetSnapshotData(Snapshot snapshot)
 	TransactionId xmin;
 	TransactionId xmax;
 	int			count = 0;
+	int			twopc_count = 0;
 	int			subcount = 0;
 	bool		suboverflowed = false;
 	FullTransactionId latest_completed;
@@ -2224,6 +2225,10 @@ GetSnapshotData(Snapshot snapshot)
 					 errmsg("out of memory")));
 	}
 
+	if (snapshot->x2pc == NULL)
+		snapshot->x2pc = (TransactionId *)
+			malloc(GetMaxSnapshotXidCount() * sizeof(TransactionId));
+
 	/*
 	 * It is sufficient to get shared lock on ProcArrayLock, even if we are
 	 * going to set MyProc->xmin.
@@ -2262,6 +2267,7 @@ GetSnapshotData(Snapshot snapshot)
 	{
 		int			numProcs = arrayP->numProcs;
 		TransactionId *xip = snapshot->xip;
+		TransactionId *x2pc = snapshot->x2pc;
 		int		   *pgprocnos = arrayP->pgprocnos;
 		XidCacheStatus *subxidStates = ProcGlobal->subxidStates;
 		uint8	   *allStatusFlags = ProcGlobal->statusFlags;
@@ -2275,7 +2281,10 @@ GetSnapshotData(Snapshot snapshot)
 			/* Fetch xid just once - see GetNewTransactionId */
 			TransactionId xid = UINT32_ACCESS_ONCE(other_xids[pgxactoff]);
 			uint8		statusFlags;
+			int			pid;
 
+			wlog(LOG, "[GetSnapshotData] Checking XID %u under [%u, %u)",
+				 xid, xmin, xmax);
 			Assert(allProcs[arrayP->pgprocnos[pgxactoff]].pgxactoff == pgxactoff);
 
 			/*
@@ -2321,7 +2330,17 @@ GetSnapshotData(Snapshot snapshot)
 				xmin = xid;
 
 			/* Add XID to snapshot. */
-			xip[count++] = xid;
+			pid = allProcs[pgprocnos[pgxactoff]].pid;
+			if (pid == 0)
+			{
+				wlog(LOG, "[GetSnapshotData(%p)] XID %u is prepared", x2pc, xid);
+				x2pc[twopc_count++] = xid;	/* prepared transaction */
+			}
+			else
+			{
+				wlog(LOG, "[GetSnapshotData(%p)] XID %u is in progress", xip, xid);
+				xip[count++] = xid; /* in progress transaction */
+			}
 
 			/*
 			 * Save subtransaction XIDs if possible (if we've already
@@ -2501,6 +2520,7 @@ GetSnapshotData(Snapshot snapshot)
 	snapshot->xmin = xmin;
 	snapshot->xmax = xmax;
 	snapshot->xcnt = count;
+	snapshot->x2pc_cnt = twopc_count;
 	snapshot->subxcnt = subcount;
 	snapshot->suboverflowed = suboverflowed;
 	snapshot->snapXactCompletionCount = curXactCompletionCount;
