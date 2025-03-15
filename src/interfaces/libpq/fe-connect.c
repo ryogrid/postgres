@@ -5865,9 +5865,13 @@ parseServiceInfo(PQconninfoOption *options, PQExpBuffer errorMessage)
 	 * exists).
 	 */
 	if (service_fname != NULL)
+	{
 		strlcpy(serviceFile, service_fname, sizeof(serviceFile));
+	}
 	else if ((env = getenv("PGSERVICEFILE")) != NULL)
+	{
 		strlcpy(serviceFile, env, sizeof(serviceFile));
+	}
 	else
 	{
 		char		homedir[MAXPGPATH];
