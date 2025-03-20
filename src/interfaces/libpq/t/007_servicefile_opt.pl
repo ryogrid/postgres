@@ -50,6 +50,9 @@ close $fh;
         $1 eq '/' ? '%2F' : '%5C'
     }ger;
 
+    # Escape a colon in servicefile path of Windows
+    $encoded_srvfile =~ s/:/%3A/g;
+
     $node->connect_ok(
         'postgresql:///?service=my_srv&servicefile='.$encoded_srvfile,
         'postgresql:///?service=my_srv&servicefile=...',
