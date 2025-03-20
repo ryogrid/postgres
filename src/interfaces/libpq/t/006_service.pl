@@ -63,6 +63,7 @@ close $fh;
 
 # Check that not existing service fails
 {
+    local $ENV{PGSERVICEFILE} = $srvfile;
     local $ENV{PGSERVICE} = 'non-existent-service';
     $node->connect_fails(
         '',
