@@ -5861,9 +5861,9 @@ parseServiceInfo(PQconninfoOption *options, PQExpBuffer errorMessage)
 		return 0;
 
 	/*
-	 * First, check servicefile option on connection string.
-	 * Second, check PGSERVICEFILE environment variable.
-	 * Finally, check ~/.pg_service.conf (if that exists).
+	 * First, check servicefile option on connection string. Second, check
+	 * PGSERVICEFILE environment variable. Finally, check ~/.pg_service.conf
+	 * (if that exists).
 	 */
 	if (service_fname != NULL)
 	{
