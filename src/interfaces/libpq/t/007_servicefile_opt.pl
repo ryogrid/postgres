@@ -20,17 +20,19 @@ $node->start();
 my $td = PostgreSQL::Test::Utils::tempdir;
 my $srvfile = "$td/pgsrv.conf";
 
-# Open file in binary mode and write CRLF or LF depending on the OS
-# Binary mode is for avoiding platform depending behavior related line ending at text mode 
-open my $fh, '>:raw', $srvfile or die $!;
-if ($PostgreSQL::Test::Utils::windows_os) {
+# Create a service file
+open my $fh, '>', $srvfile or die $!;
+if ($windows_os) {
     # Windows: use CRLF
-    print $fh "[my_srv]", "\x0d\x0a";
-    print $fh join("\x0d\x0a", split(' ', $node->connstr)), "\x0d\x0a";
+    print $fh "[my_srv]", "\r\n";
+    print $fh join("\r\n", split(' ', $node->connstr)), "\r\n";
+
+    # Escape backslashes for use in connection string later
+    $srvfile =~ s/\\/\\\\/g;
 } else {
     # Non-Windows: use LF
-    print $fh "[my_srv]", "\x0a";
-    print $fh join("\x0a", split(' ', $node->connstr)), "\x0a";
+    print $fh "[my_srv]", "\n";
+    print $fh join("\n", split(' ', $node->connstr)), "\n";
 }
 close $fh;
 
@@ -42,8 +44,14 @@ close $fh;
         sql => "SELECT 'connect1'",
         expected_stdout => qr/connect1/);
 
+    # Escape slashes in servicefile path for use in connection string
+    # Consider that the servicefile path may contain backslashes on Windows
+    my $encoded_srvfile = $srvfile =~ s{([\\/])}{
+        $1 eq '/' ? '%2F' : '%5C'
+    }ger;
+
     $node->connect_ok(
-        'postgresql:///?service=my_srv&servicefile='.($srvfile =~ s!/!%2F!gr),
+        'postgresql:///?service=my_srv&servicefile='.$encoded_srvfile,
         'postgresql:///?service=my_srv&servicefile=...',
         sql => "SELECT 'connect2'",
         expected_stdout => qr/connect2/);
@@ -56,13 +64,13 @@ close $fh;
         expected_stdout => qr/connect3/);
 
     $node->connect_ok(
-        'postgresql://?servicefile='.($srvfile =~ s!/!%2F!gr),
+        'postgresql://?servicefile='.$encoded_srvfile,
         'envvar: PGSERVICE=my_srv + postgresql://?servicefile=...',
         sql => "SELECT 'connect4'",
         expected_stdout => qr/connect4/);
 }
 
-# Check that servicefile option takes precedence over PGSERVICEFILE
+# Check that servicefile option takes precedence over PGSERVICEFILE environment variable
 {    
     local $ENV{PGSERVICEFILE} = 'non-existent-file.conf';
 

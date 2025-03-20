@@ -20,17 +20,16 @@ $node->start();
 my $td = PostgreSQL::Test::Utils::tempdir;
 my $srvfile = "$td/pgsrv.conf";
 
-# Open file in binary mode and write CRLF or LF depending on the OS
-# Binary mode is for avoiding platform depending behavior related line ending at text mode 
-open my $fh, '>:raw', $srvfile or die $!;
-if ($PostgreSQL::Test::Utils::windows_os) {
+# Create a service file
+open my $fh, '>', $srvfile or die $!;
+if ($windows_os) {
     # Windows: use CRLF
-    print $fh "[my_srv]", "\x0d\x0a";
-    print $fh join("\x0d\x0a", split(' ', $node->connstr)), "\x0d\x0a";
+    print $fh "[my_srv]", "\r\n";
+    print $fh join("\r\n", split(' ', $node->connstr)), "\r\n";
 } else {
     # Non-Windows: use LF
-    print $fh "[my_srv]", "\x0a";
-    print $fh join("\x0a", split(' ', $node->connstr)), "\x0a";
+    print $fh "[my_srv]", "\n";
+    print $fh join("\n", split(' ', $node->connstr)), "\n";
 }
 close $fh;
 
