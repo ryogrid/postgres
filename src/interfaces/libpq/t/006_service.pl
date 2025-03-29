@@ -136,6 +136,102 @@ local $ENV{PGSERVICEFILE} = "$srvfile_empty";
 	unlink($srvfile_default);
 }
 
+# Backslashes escaped path string for getting collect result at concatenation
+# for Windows environment
+my $srvfile_win_cared = $srvfile_valid;
+$srvfile_win_cared =~ s/\\/\\\\/g;
+
+# Checks combinations of service name and valid "servicefile" string.
+{
+	$node->connect_ok(
+		q{service=my_srv servicefile='} . $srvfile_win_cared . q{'},
+		'connection with correct "service" string and correct "servicefile" string',
+		sql             => "SELECT 'connect3_1'",
+		expected_stdout => qr/connect3_1/);
+
+	local $ENV{PGSERVICE} = 'my_srv';
+	$node->connect_ok(
+		q{servicefile='} . $srvfile_win_cared . q{'},
+		'connection with correct PGSERVICE and collect "servicefile" string',
+		sql             => "SELECT 'connect3_2'",
+		expected_stdout => qr/connect3_2/);
+
+	$node->connect_fails(
+		q{service=undefined-service servicefile='} . $srvfile_win_cared . q{'},
+		'connection with incorrect "service" string and collect "servicefile" string',
+		expected_stderr =>
+			qr/definition of service "undefined-service" not found/);
+
+	local $ENV{PGSERVICE} = 'undefined-service';
+	$node->connect_fails(
+		q{servicefile='} . $srvfile_win_cared . q{'},
+		'connection with incorrect PGSERVICE and collect "servicefile"',
+		expected_stderr =>
+			qr/definition of service "undefined-service" not found/);
+}
+
+# Checks combinations of service name and a valid "servicefile" string in URI format.
+{
+	# Encode slashes and backslash
+	my $encoded_srvfile = $srvfile_valid =~ s{([\\/])}{
+        $1 eq '/' ? '%2F' : '%5C'
+    }ger;
+
+	# Additionaly encode a colon in servicefile path of Windows
+	$encoded_srvfile =~ s/:/%3A/g;
+
+	$node->connect_ok(
+		'postgresql:///?service=my_srv&servicefile=' . $encoded_srvfile,
+		'connection with correct "service" string and correct "servicefile" in URI format',
+		sql => "SELECT 'connect4_1'",
+		expected_stdout => qr/connect4_1/);
+
+	local $ENV{PGSERVICE} = 'my_srv';
+	$node->connect_ok(
+		'postgresql://?servicefile=' . $encoded_srvfile,
+		'connection with correct PGSERVICE and collect "servicefile" in URI format',
+		sql => "SELECT 'connect4_2'",
+		expected_stdout => qr/connect4_2/);
+
+	$node->connect_fails(
+		'postgresql:///?service=undefined-service&servicefile=' . $encoded_srvfile,
+		'connection with incorrect "service" string and collect "servicefile" in URI format',
+		expected_stderr =>
+		  qr/definition of service "undefined-service" not found/);
+}
+
+# Checks case of incorrect "servicefile" string.
+{
+	# Backslashes escaped path string for getting collect result at concatenation
+	# for Windows environment
+	my $srvfile_missing_win_cared = $srvfile_missing;
+	$srvfile_missing_win_cared =~ s/\\/\\\\/g;
+
+	$node->connect_fails(
+		q{service=my_srv servicefile='} . $srvfile_missing_win_cared . q{'},
+		'connection with correct "service" string and incorrect "servicefile" string',
+		sql => "SELECT 'connect5_1'",
+		expected_stderr =>
+			qr/service file ".*pg_service_missing.conf" not found/);
+}
+
+# Check that "servicefile" string takes precedence over PGSERVICEFILE environment variable
+{
+	local $ENV{PGSERVICEFILE} = $srvfile_missing;
+
+	$node->connect_fails(
+		'service=my_srv',
+		'connecttion with correct "service" string and incorrect PGSERVICEFILE',
+		expected_stderr =>
+		  qr/service file ".*pg_service_missing.conf" not found/);
+
+	$node->connect_ok(
+		q{service=my_srv servicefile='} . $srvfile_win_cared . q{'},
+		'connectin with correct "service" string, incorrect PGSERVICEFILE and correct "servicefile" string',
+		sql => "SELECT 'connect6_1'",
+		expected_stdout => qr/connect6_1/);
+}
+
 $node->teardown_node;
 
 done_testing();
