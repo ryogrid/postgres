@@ -7,7 +7,7 @@ use PostgreSQL::Test::Cluster;
 use Test::More;
 
 # This tests scenarios related to the service name and the service file,
-# for the connection options and their environment variables.
+# for the connection options, servicefile options and their environment variables.
 
 my $node = PostgreSQL::Test::Cluster->new('node');
 $node->init;
@@ -144,6 +144,69 @@ local $ENV{PGSERVICEFILE} = "$srvfile_empty";
 
 	# Remove default pg_service.conf.
 	unlink($srvfile_default);
+}
+
+# Backslashes escaped path string for getting collect result at concatenation
+# for Windows environment
+my $srvfile_win_cared = $srvfile_valid;
+$srvfile_win_cared =~ s/\\/\\\\/g;
+
+# Check that servicefile option works as expected
+{
+	$dummy_node->connect_ok(
+		q{service=my_srv servicefile='} . $srvfile_win_cared . q{'},
+		'service=my_srv servicefile=...',
+		sql             => "SELECT 'connect3'",
+		expected_stdout => qr/connect3/
+	);
+
+	# Encode slashes and backslash
+	my $encoded_srvfile = $srvfile_valid =~ s{([\\/])}{
+		$1 eq '/' ? '%2F' : '%5C'
+	}ger;
+
+	# Additionaly encode a colon in servicefile path of Windows
+	$encoded_srvfile =~ s/:/%3A/g;
+
+	$dummy_node->connect_ok(
+		'postgresql:///?service=my_srv&servicefile=' . $encoded_srvfile,
+		'postgresql:///?service=my_srv&servicefile=...',
+		sql             => "SELECT 'connect4'",
+		expected_stdout => qr/connect4/
+	);
+
+	local $ENV{PGSERVICE} = 'my_srv';
+	$dummy_node->connect_ok(
+		q{servicefile='} . $srvfile_win_cared . q{'},
+		'envvar: PGSERVICE=my_srv + servicefile=...',
+		sql             => "SELECT 'connect5'",
+		expected_stdout => qr/connect5/
+	);
+
+	$dummy_node->connect_ok(
+		'postgresql://?servicefile=' . $encoded_srvfile,
+		'envvar: PGSERVICE=my_srv + postgresql://?servicefile=...',
+		sql             => "SELECT 'connect6'",
+		expected_stdout => qr/connect6/
+	);
+}
+
+# Check that servicefile option takes precedence over PGSERVICEFILE environment variable
+{
+	local $ENV{PGSERVICEFILE} = 'non-existent-file.conf';
+
+	$dummy_node->connect_fails(
+		'service=my_srv',
+		'service=... fails with wrong PGSERVICEFILE',
+		expected_stderr => qr/service file "non-existent-file\.conf" not found/
+	);
+
+	$dummy_node->connect_ok(
+		q{service=my_srv servicefile='} . $srvfile_win_cared . q{'},
+		'servicefile= takes precedence over PGSERVICEFILE',
+		sql             => "SELECT 'connect7'",
+		expected_stdout => qr/connect7/
+	);
 }
 
 $node->teardown_node;
