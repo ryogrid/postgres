@@ -814,9 +814,40 @@ static const BuiltinScript builtin_script[] =
 		"<builtin: select only>",
 		"\\set aid random(1, " CppAsString2(naccounts) " * :scale)\n"
 		"SELECT abalance FROM pgbench_accounts WHERE aid = :aid;\n"
+	},
+	{
+		"tpcc",
+		"<builtin: TPC-C benchmark>",
+		NULL /* TPC-C logic is implemented directly in C */
 	}
 };
 
+/* TPC-C transaction types */
+typedef enum {
+	TPCC_NEW_ORDER,
+	TPCC_PAYMENT,
+	TPCC_ORDER_STATUS,
+	TPCC_DELIVERY,
+	TPCC_STOCK_LEVEL,
+	TPCC_NUM_TYPES
+} TPCCTransactionType;
+
+/* TPC-C transaction mix percentages */
+static const int TPCC_TRANSACTION_MIX[TPCC_NUM_TYPES] = {
+	45, /* New-Order */
+	43, /* Payment */
+	4, /* Order-Status */
+	4, /* Delivery */
+	4 /* Stock-Level */
+};
+
+/* Function prototypes for TPC-C transactions */
+static bool executeTPCCTransaction(PGconn *con, TPCCTransactionType type);
+static bool executeTPCCNewOrder(PGconn *con);
+static bool executeTPCCPayment(PGconn *con);
+static bool executeTPCCOrderStatus(PGconn *con);
+static bool executeTPCCDelivery(PGconn *con);
+static bool executeTPCCStockLevel(PGconn *con);
 
 /* Function prototypes */
 static void setNullValue(PgBenchValue *pv);
@@ -7446,6 +7477,401 @@ main(int argc, char **argv)
 	return exit_code;
 }
 
+/* Execute a TPC-C transaction based on the type */
+static bool executeTPCCTransaction(PGconn *con, TPCCTransactionType type) {
+	switch (type) {
+		case TPCC_NEW_ORDER:
+			return executeTPCCNewOrder(con);
+		case TPCC_PAYMENT:
+			return executeTPCCPayment(con);
+		case TPCC_ORDER_STATUS:
+			return executeTPCCOrderStatus(con);
+		case TPCC_DELIVERY:
+			return executeTPCCDelivery(con);
+		case TPCC_STOCK_LEVEL:
+			return executeTPCCStockLevel(con);
+		default:
+			pg_log_error("Unknown TPC-C transaction type: %d", type);
+			return false;
+	}
+}
+
+/* Select a TPC-C transaction type based on the mix percentages */
+static TPCCTransactionType selectTPCCTransactionType(pg_prng_state *state) {
+	int rand_value = getrand(state, 1, 100);
+	int cumulative = 0;
+
+	for (int i = 0; i < TPCC_NUM_TYPES; i++) {
+		cumulative += TPCC_TRANSACTION_MIX[i];
+		if (rand_value <= cumulative) {
+			return (TPCCTransactionType) i;
+		}
+	}
+
+	/* Should not reach here */
+	Assert(false);
+	return TPCC_NEW_ORDER;
+}
+
+/* Implementations of TPC-C transaction logic */
+static bool executeTPCCNewOrder(PGconn *con) {
+	// Implement the New-Order transaction logic here
+	PGresult *res;
+
+	res = PQexec(con, "BEGIN");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		PQclear(res);
+		return false;
+	}
+	PQclear(res);
+
+	// Example SQL for New-Order transaction
+	res = PQexec(con, "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 1");
+	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+		PQclear(res);
+		PQexec(con, "ROLLBACK");
+		return false;
+	}
+	PQclear(res);
+
+	res = PQexec(con, "COMMIT");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+		PQclear(res);
+		return false;
+	}
+	PQclear(res);
+
+	return true;
+}
+
+static bool executeTPCCPayment(PGconn *con) {
+	// Not implemented yet
+	return true;
+}
+
+static bool executeTPCCOrderStatus(PGconn *con) {
+	// Not implemented yet
+	return true;
+}
+
+static bool executeTPCCDelivery(PGconn *con) {
+	// Not implemented yet
+	return true;
+}
+
+static bool executeTPCCStockLevel(PGconn *con) {
+	// Not implemented yet
+	return true;
+}
+
+/* Modify threadRun to support TPC-C */
+static THREAD_FUNC_RETURN_TYPE THREAD_FUNC_CC
+threadRunTPCC(void *arg) {
+	TState *thread = (TState *) arg;
+	CState *state = thread->state;
+	pg_time_usec_t start;
+	int nstate = thread->nstate;
+	int remains = nstate; /* number of remaining clients */
+	socket_set *sockets = alloc_socket_set(nstate);
+	int64		thread_start,
+				last_report,
+				next_report;
+	StatsData	last,
+				aggs;
+
+	/* open log file if requested */
+	if (use_log)
+	{
+		char		logpath[MAXPGPATH];
+		char	   *prefix = logfile_prefix ? logfile_prefix : "pgbench_log";
+
+		if (thread->tid == 0)
+			snprintf(logpath, sizeof(logpath), "%s.%d", prefix, main_pid);
+		else
+			snprintf(logpath, sizeof(logpath), "%s.%d.%d", prefix, main_pid, thread->tid);
+
+		thread->logfile = fopen(logpath, "w");
+
+		if (thread->logfile == NULL)
+			pg_fatal("could not open logfile \"%s\": %m", logpath);
+	}
+
+	/* explicitly initialize the state machines */
+	for (int i = 0; i < nstate; i++)
+		state[i].state = CSTATE_CHOOSE_SCRIPT;
+
+	/* READY */
+	THREAD_BARRIER_WAIT(&barrier);
+
+	thread_start = pg_time_now();
+	thread->started_time = thread_start;
+	thread->conn_duration = 0;
+	last_report = thread_start;
+	next_report = last_report + (int64) 1000000 * progress;
+
+	/* STEADY */
+	if (!is_connect)
+	{
+		/* make connections to the database before starting */
+		for (int i = 0; i < nstate; i++)
+		{
+			if ((state[i].con = doConnect()) == NULL)
+			{
+				/* coldly abort on initial connection failure */
+				pg_fatal("could not create connection for client %d",
+						 state[i].id);
+			}
+		}
+	}
+
+	/* GO */
+	THREAD_BARRIER_WAIT(&barrier);
+
+	start = pg_time_now();
+	thread->bench_start = start;
+	thread->throttle_trigger = start;
+
+	/*
+	 * The log format currently has Unix epoch timestamps with whole numbers
+	 * of seconds.  Round the first aggregate's start time down to the nearest
+	 * Unix epoch second (the very first aggregate might really have started a
+	 * fraction of a second later, but later aggregates are measured from the
+	 * whole number time that is actually logged).
+	 */
+	initStats(&aggs, (start + epoch_shift) / 1000000 * 1000000);
+	last = aggs;
+
+	/* loop till all clients have terminated */
+	while (remains > 0)
+	{
+		int			nsocks;		/* number of sockets to be waited for */
+		pg_time_usec_t min_usec;
+		pg_time_usec_t now = 0; /* set this only if needed */
+
+		/*
+		 * identify which client sockets should be checked for input, and
+		 * compute the nearest time (if any) at which we need to wake up.
+		 */
+		clear_socket_set(sockets);
+		nsocks = 0;
+		min_usec = PG_INT64_MAX;
+		for (int i = 0; i < nstate; i++)
+		{
+			CState	   *st = &state[i];
+
+			if (st->state == CSTATE_CHOOSE_SCRIPT) {
+				TPCCTransactionType type = selectTPCCTransactionType(&thread->ts_choose_rs);
+				if (!executeTPCCTransaction(st->con, type)) {
+					st->state = CSTATE_ABORTED;
+				} else {
+					st->state = CSTATE_END_TX;
+				}
+			}
+			else if (st->state == CSTATE_SLEEP || st->state == CSTATE_THROTTLE)
+			{
+				/* a nap from the script, or under throttling */
+				pg_time_usec_t this_usec;
+
+				/* get current time if needed */
+				pg_time_now_lazy(&now);
+
+				/* min_usec should be the minimum delay across all clients */
+				this_usec = (st->state == CSTATE_SLEEP ?
+							 st->sleep_until : st->txn_scheduled) - now;
+				if (min_usec > this_usec)
+					min_usec = this_usec;
+			}
+			else if (st->state == CSTATE_WAIT_RESULT ||
+					 st->state == CSTATE_WAIT_ROLLBACK_RESULT)
+			{
+				/*
+				 * waiting for result from server - nothing to do unless the
+				 * socket is readable
+				 */
+				int			sock = PQsocket(st->con);
+
+				if (sock < 0)
+				{
+					pg_log_error("invalid socket: %s", PQerrorMessage(st->con));
+					goto done;
+				}
+
+				add_socket_to_set(sockets, sock, nsocks++);
+			}
+			else if (st->state != CSTATE_ABORTED &&
+					 st->state != CSTATE_FINISHED)
+			{
+				/*
+				 * This client thread is ready to do something, so we don't
+				 * want to wait.  No need to examine additional clients.
+				 */
+				min_usec = 0;
+				break;
+			}
+		}
+
+		/* also wake up to print the next progress report on time */
+		if (progress && min_usec > 0 && thread->tid == 0)
+		{
+			pg_time_now_lazy(&now);
+
+			if (now >= next_report)
+				min_usec = 0;
+			else if ((next_report - now) < min_usec)
+				min_usec = next_report - now;
+		}
+
+		/*
+		 * If no clients are ready to execute actions, sleep until we receive
+		 * data on some client socket or the timeout (if any) elapses.
+		 */
+		if (min_usec > 0)
+		{
+			int			rc = 0;
+
+			if (min_usec != PG_INT64_MAX)
+			{
+				if (nsocks > 0)
+				{
+					rc = wait_on_socket_set(sockets, min_usec);
+				}
+				else			/* nothing active, simple sleep */
+				{
+					pg_usleep(min_usec);
+				}
+			}
+			else				/* no explicit delay, wait without timeout */
+			{
+				rc = wait_on_socket_set(sockets, 0);
+			}
+
+			if (rc < 0)
+			{
+				if (errno == EINTR)
+				{
+					/* On EINTR, go back to top of loop */
+					continue;
+				}
+				/* must be something wrong */
+				pg_log_error("%s() failed: %m", SOCKET_WAIT_METHOD);
+				goto done;
+			}
+		}
+		else
+		{
+			/* min_usec <= 0, i.e. something needs to be executed now */
+
+			/* If we didn't wait, don't try to read any data */
+			clear_socket_set(sockets);
+		}
+
+		/* ok, advance the state machine of each connection */
+		nsocks = 0;
+		for (int i = 0; i < nstate; i++)
+		{
+			CState	   *st = &state[i];
+
+			if (st->state == CSTATE_WAIT_RESULT ||
+				st->state == CSTATE_WAIT_ROLLBACK_RESULT)
+			{
+				/* don't call advanceConnectionState unless data is available */
+				int			sock = PQsocket(st->con);
+
+				if (sock < 0)
+				{
+					pg_log_error("invalid socket: %s", PQerrorMessage(st->con));
+					goto done;
+				}
+
+				if (!socket_has_input(sockets, sock, nsocks++))
+					continue;
+			}
+			else if (st->state == CSTATE_FINISHED ||
+					 st->state == CSTATE_ABORTED)
+			{
+				/* this client is done, no need to consider it anymore */
+				continue;
+			}
+
+			advanceConnectionState(thread, st, &aggs);
+
+			/*
+			 * If --exit-on-abort is used, the program is going to exit when
+			 * any client is aborted.
+			 */
+			if (exit_on_abort && st->state == CSTATE_ABORTED)
+				goto done;
+
+			/*
+			 * If advanceConnectionState changed client to finished state,
+			 * that's one fewer client that remains.
+			 */
+			else if (st->state == CSTATE_FINISHED ||
+					 st->state == CSTATE_ABORTED)
+				remains--;
+		}
+
+		/* progress report is made by thread 0 for all threads */
+		if (progress && thread->tid == 0)
+		{
+			pg_time_usec_t now2 = pg_time_now();
+
+			if (now2 >= next_report)
+			{
+				/*
+				 * Horrible hack: this relies on the thread pointer we are
+				 * passed to be equivalent to threads[0], that is the first
+				 * entry of the threads array.  That is why this MUST be done
+				 * by thread 0 and not any other.
+				 */
+				printProgressReport(thread, thread_start, now2,
+									&last, &last_report);
+
+				/*
+				 * Ensure that the next report is in the future, in case
+				 * pgbench/postgres got stuck somewhere.
+				 */
+				do
+				{
+					next_report += (int64) 1000000 * progress;
+				} while (now2 >= next_report);
+			}
+		}
+	}
+
+done:
+	if (exit_on_abort)
+	{
+		/*
+		 * Abort if any client is not finished, meaning some error occurred.
+		 */
+		for (int i = 0; i < nstate; i++)
+		{
+			if (state[i].state != CSTATE_FINISHED)
+			{
+				pg_log_error("Run was aborted due to an error in thread %d",
+							 thread->tid);
+				exit(2);
+			}
+		}
+	}
+
+	disconnect_all(state, nstate);
+
+	if (thread->logfile)
+	{
+		if (agg_interval > 0)
+		{
+			/* log aggregated but not yet reported transactions */
+			doLog(thread, state, &aggs, false, 0, 0);
+		}
+		fclose(thread->logfile);
+		thread->logfile = NULL;
+	}
+	free_socket_set(sockets);
+	THREAD_FUNC_RETURN;
+}
+
 static THREAD_FUNC_RETURN_TYPE THREAD_FUNC_CC
 threadRun(void *arg)
 {
@@ -7979,3 +8405,4 @@ socket_has_input(socket_set *sa, int fd, int idx)
 }
 
 #endif							/* POLL_USING_SELECT */
+
