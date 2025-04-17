@@ -181,6 +181,9 @@ static int64 end_time = 0;		/* when to stop in micro seconds, under -T */
  */
 static int	scale = 1;
 
+/* Number of warehouses for TPC-C */
+static int nwarehouses = 1;
+
 /*
  * fillfactor. for example, fillfactor = 90 will use only 90 percent
  * space during inserts and leave 10 percent free.
@@ -269,6 +272,7 @@ static bool report_per_command = false; /* report per-command latencies,
 										 * retries after errors and failures
 										 * (errors without retrying) */
 static int	main_pid;			/* main process id used in log filename */
+static bool tpcc_mode = false;
 
 /*
  * There are different types of restrictions for deciding that the current
@@ -836,9 +840,9 @@ typedef enum {
 static const int TPCC_TRANSACTION_MIX[TPCC_NUM_TYPES] = {
 	45, /* New-Order */
 	43, /* Payment */
-	4, /* Order-Status */
-	4, /* Delivery */
-	4 /* Stock-Level */
+	4,  /* Order-Status */
+	4,  /* Delivery */
+	4   /* Stock-Level */
 };
 
 /* Function prototypes for TPC-C transactions */
@@ -863,6 +867,7 @@ static void processXactStats(TState *thread, CState *st, pg_time_usec_t *now,
 							 bool skipped, StatsData *agg);
 static void addScript(const ParsedScript *script);
 static THREAD_FUNC_RETURN_TYPE THREAD_FUNC_CC threadRun(void *arg);
+static THREAD_FUNC_RETURN_TYPE THREAD_FUNC_CC threadRunTPCC(void *arg);
 static void finishCon(CState *st);
 static void setalarm(int seconds);
 static socket_set *alloc_socket_set(int count);
@@ -6718,6 +6723,7 @@ main(int argc, char **argv)
 		{"transactions", required_argument, NULL, 't'},
 		{"username", required_argument, NULL, 'U'},
 		{"vacuum-all", no_argument, NULL, 'v'},
+		{"warehouses", required_argument, NULL, 'W'},
 		/* long-named only options */
 		{"unlogged-tables", no_argument, NULL, 1},
 		{"tablespace", required_argument, NULL, 2},
@@ -6787,6 +6793,7 @@ main(int argc, char **argv)
 	pg_logging_init(argv[0]);
 	progname = get_progname(argv[0]);
 
+
 	if (argc > 1)
 	{
 		if (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-?") == 0)
@@ -6818,6 +6825,11 @@ main(int argc, char **argv)
 				{
 					listAvailableScripts();
 					exit(0);
+				}
+				else if (strcmp(optarg, "tpcc") == 0)
+				{
+					tpcc_mode = true;
+					break;
 				}
 				weight = parseScriptWeight(optarg, &script);
 				process_builtin(findBuiltin(script), weight);
@@ -6997,6 +7009,12 @@ main(int argc, char **argv)
 			case 'v':
 				benchmarking_option_set = true;
 				do_vacuum_accounts = true;
+				break;
+			case 'W':  /* warehouses */
+				nwarehouses = atoi(optarg);
+				if (nwarehouses <= 0) {
+					pg_fatal("invalid number of warehouses: %s", optarg);
+				}
 				break;
 			case 1:				/* unlogged-tables */
 				initialization_option_set = true;
@@ -7400,13 +7418,21 @@ main(int argc, char **argv)
 	if (errno != 0)
 		pg_fatal("could not initialize barrier: %m");
 
+
 	/* start all threads but thread 0 which is executed directly later */
 	for (i = 1; i < nthreads; i++)
 	{
 		TState	   *thread = &threads[i];
 
 		thread->create_time = pg_time_now();
-		errno = THREAD_CREATE(&thread->thread, threadRun, thread);
+		if (tpcc_mode) {
+			errno = THREAD_CREATE(&thread->thread, threadRunTPCC, thread);
+		}
+		else
+		{
+			errno = THREAD_CREATE(&thread->thread, threadRun, thread);
+		}
+
 
 		if (errno != 0)
 			pg_fatal("could not create thread: %m");
@@ -7513,29 +7539,371 @@ static TPCCTransactionType selectTPCCTransactionType(pg_prng_state *state) {
 	return TPCC_NEW_ORDER;
 }
 
-/* Implementations of TPC-C transaction logic */
-static bool executeTPCCNewOrder(PGconn *con) {
-	// Implement the New-Order transaction logic here
-	PGresult *res;
+/*
+ * TPC-C New-Order Transaction
+ * This transaction type accounts for approximately 45% of the workload
+ */
+static bool
+executeTPCCNewOrder(PGconn *con)
+{
+    PGresult *res;
+    int w_id, d_id, c_id;
+    int o_ol_cnt;
+    int i, item_count;
+    bool all_local = true;
 
+    /* Generate parameters randomly */
+    w_id = getrand(&base_random_sequence, 1, nwarehouses);
+    d_id = getrand(&base_random_sequence, 1, 10);
+    c_id = getrand(&base_random_sequence, 1, 3000);
+    o_ol_cnt = getrand(&base_random_sequence, 5, 15);
+
+    /* Start transaction */
+    res = PQexec(con, "BEGIN");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+
+    /* Get the next order_id from the district table */
+    res = PQexecParams(con,
+                     "SELECT d_next_o_id FROM district WHERE d_w_id = $1 AND d_id = $2 FOR UPDATE",
+                     2, NULL, (const char *[]){psprintf("%d", w_id), psprintf("%d", d_id)}, NULL, NULL, 0);
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+    {
+        PQclear(res);
+        PQexec(con, "ROLLBACK");
+        return false;
+    }
+
+    int o_id = atoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+
+    /* Update the next order_id in the district table */
+    res = PQexecParams(con,
+                     "UPDATE district SET d_next_o_id = d_next_o_id + 1 WHERE d_w_id = $1 AND d_id = $2",
+                     2, NULL, (const char *[]){psprintf("%d", w_id), psprintf("%d", d_id)}, NULL, NULL, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        PQclear(res);
+        PQexec(con, "ROLLBACK");
+        return false;
+    }
+    PQclear(res);
+
+	/* Insert into the orders table */
+    res = PQexecParams(con,
+                     "INSERT INTO orders (o_id, o_d_id, o_w_id, o_c_id, o_entry_d, o_ol_cnt, o_all_local) "
+                     "VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, $5, $6)",
+                     6, NULL,
+					 (const char *[]){
+						 psprintf("%d", o_id),
+						 psprintf("%d", d_id),
+						 psprintf("%d", w_id),
+						 psprintf("%d", c_id),
+						 psprintf("%d", o_ol_cnt),
+						 "1"  /* o_all_local may be updated later */
+                     }, NULL, NULL, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        PQclear(res);
+        PQexec(con, "ROLLBACK");
+        return false;
+    }
+    PQclear(res);
+
+    /* new_order表に挿入 */
+    res = PQexecParams(con,
+                     "INSERT INTO new_order (no_o_id, no_d_id, no_w_id) VALUES ($1, $2, $3)",
+                     3, NULL,
+                     (const char *[]){
+                         psprintf("%d", o_id),
+                         psprintf("%d", d_id),
+                         psprintf("%d", w_id)
+                     }, NULL, NULL, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        PQclear(res);
+        PQexec(con, "ROLLBACK");
+        return false;
+    }
+    PQclear(res);
+
+	/* Process each order line item */
+    for (i = 0; i < o_ol_cnt; i++)
+    {
+        int ol_i_id = getrand(&base_random_sequence, 1, 100000);
+        int ol_supply_w_id = w_id;
+        int ol_quantity = getrand(&base_random_sequence, 1, 10);
+
+		/* About 1% chance of ordering from a remote warehouse */
+        if (nwarehouses > 1 && getrand(&base_random_sequence, 1, 100) == 1)
+        {
+            do {
+                ol_supply_w_id = getrand(&base_random_sequence, 1, nwarehouses);
+            } while (ol_supply_w_id == w_id);
+
+            all_local = false;
+        }
+
+		/* Fetch item information */
+        res = PQexecParams(con,
+                         "SELECT i_price, i_name FROM item WHERE i_id = $1",
+                         1, NULL, (const char *[]){psprintf("%d", ol_i_id)}, NULL, NULL, 0);
+
+        if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+        {
+            PQclear(res);
+            PQexec(con, "ROLLBACK");
+            return false;
+        }
+
+        double i_price = atof(PQgetvalue(res, 0, 0));
+        PQclear(res);
+
+		/* Retrieve and update stock information */
+        res = PQexecParams(con,
+                         "SELECT s_quantity, s_dist_01, s_dist_02, s_dist_03, s_dist_04, "
+                         "s_dist_05, s_dist_06, s_dist_07, s_dist_08, s_dist_09, s_dist_10 "
+                         "FROM stock WHERE s_i_id = $1 AND s_w_id = $2 FOR UPDATE",
+                         2, NULL,
+                         (const char *[]){psprintf("%d", ol_i_id), psprintf("%d", ol_supply_w_id)},
+                         NULL, NULL, 0);
+
+        if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+        {
+            PQclear(res);
+            PQexec(con, "ROLLBACK");
+            return false;
+        }
+
+        int s_quantity = atoi(PQgetvalue(res, 0, 0));
+        char *s_dist = PQgetvalue(res, 0, d_id); /* d_idに対応するdist_xx列を選択 */
+
+        PQclear(res);
+
+		/* Update stock quantity */
+        if (s_quantity > ol_quantity)
+            s_quantity -= ol_quantity;
+        else
+            s_quantity = s_quantity - ol_quantity + 91;
+
+        res = PQexecParams(con,
+                         "UPDATE stock SET s_quantity = $1, "
+                         "s_ytd = s_ytd + $2, s_order_cnt = s_order_cnt + 1, "
+                         "s_remote_cnt = s_remote_cnt + $3 "
+                         "WHERE s_i_id = $4 AND s_w_id = $5",
+                         5, NULL,
+                         (const char *[]){
+                             psprintf("%d", s_quantity),
+                             psprintf("%d", ol_quantity),
+                             (ol_supply_w_id != w_id) ? "1" : "0",
+                             psprintf("%d", ol_i_id),
+                             psprintf("%d", ol_supply_w_id)
+                         }, NULL, NULL, 0);
+
+        if (PQresultStatus(res) != PGRES_COMMAND_OK)
+        {
+            PQclear(res);
+            PQexec(con, "ROLLBACK");
+            return false;
+        }
+        PQclear(res);
+
+		/* Insert into the order_line table */
+        double ol_amount = ol_quantity * i_price;
+
+        res = PQexecParams(con,
+                         "INSERT INTO order_line (ol_o_id, ol_d_id, ol_w_id, ol_number, "
+                         "ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_dist_info) "
+                         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                         9, NULL,
+                         (const char *[]){
+                             psprintf("%d", o_id),
+                             psprintf("%d", d_id),
+                             psprintf("%d", w_id),
+                             psprintf("%d", i + 1),
+                             psprintf("%d", ol_i_id),
+                             psprintf("%d", ol_supply_w_id),
+                             psprintf("%d", ol_quantity),
+                             psprintf("%.2f", ol_amount),
+                             s_dist
+                         }, NULL, NULL, 0);
+
+        if (PQresultStatus(res) != PGRES_COMMAND_OK)
+        {
+            PQclear(res);
+            PQexec(con, "ROLLBACK");
+            return false;
+        }
+        PQclear(res);
+    }
+
+	/* Update o_all_local value (if necessary) */
+    if (!all_local)
+    {
+        res = PQexecParams(con,
+                         "UPDATE orders SET o_all_local = 0 WHERE o_id = $1 AND o_d_id = $2 AND o_w_id = $3",
+                         3, NULL,
+                         (const char *[]){
+                             psprintf("%d", o_id),
+                             psprintf("%d", d_id),
+                             psprintf("%d", w_id)
+                         }, NULL, NULL, 0);
+
+        if (PQresultStatus(res) != PGRES_COMMAND_OK)
+        {
+            PQclear(res);
+            PQexec(con, "ROLLBACK");
+            return false;
+        }
+        PQclear(res);
+    }
+
+    res = PQexec(con, "COMMIT");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK)
+    {
+        PQclear(res);
+        return false;
+    }
+    PQclear(res);
+
+    return true;
+}
+
+/*
+ * TPC-C Payment Transaction
+ * Accounts for approximately 43% of the total workload
+ */
+static bool
+executeTPCCPayment(PGconn *con)
+{
+	PGresult *res;
+	int w_id, d_id, c_id, c_d_id, c_w_id;
+	double h_amount;
+
+	/* Generate parameters randomly */
+	w_id = getrand(&base_random_sequence, 1, nwarehouses);
+	d_id = getrand(&base_random_sequence, 1, 10);
+	h_amount = (double)(getrand(&base_random_sequence, 100, 500000)) / 100.0;
+
+	/* 85% chance of payment from a local customer */
+	if (getrand(&base_random_sequence, 1, 100) <= 85 || nwarehouses == 1)
+	{
+		c_d_id = d_id;
+		c_w_id = w_id;
+	}
+	else
+	{
+		/* Remote payment */
+		c_d_id = getrand(&base_random_sequence, 1, 10);
+		do {
+			c_w_id = getrand(&base_random_sequence, 1, nwarehouses);
+		} while (c_w_id == w_id);
+	}
+
+	/* Find customer by name (60%) or by customer ID (40%) */
+	c_id = getrand(&base_random_sequence, 1, 3000);
+
+	/* Start transaction */
 	res = PQexec(con, "BEGIN");
-	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
 		PQclear(res);
 		return false;
 	}
 	PQclear(res);
 
-	// Example SQL for New-Order transaction
-	res = PQexec(con, "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 1");
-	if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+	/* Update warehouse table */
+	res = PQexecParams(con,
+					 "UPDATE warehouse SET w_ytd = w_ytd + $1 WHERE w_id = $2",
+					 2, NULL,
+					 (const char *[]){
+						 psprintf("%.2f", h_amount),
+						 psprintf("%d", w_id)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
 		PQclear(res);
 		PQexec(con, "ROLLBACK");
 		return false;
 	}
 	PQclear(res);
 
+	/* Update district table */
+	res = PQexecParams(con,
+					 "UPDATE district SET d_ytd = d_ytd + $1 WHERE d_w_id = $2 AND d_id = $3",
+					 3, NULL,
+					 (const char *[]){
+						 psprintf("%.2f", h_amount),
+						 psprintf("%d", w_id),
+						 psprintf("%d", d_id)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		PQclear(res);
+		PQexec(con, "ROLLBACK");
+		return false;
+	}
+	PQclear(res);
+
+	/* Update customer table */
+	res = PQexecParams(con,
+					 "UPDATE customer SET c_balance = c_balance - $1, "
+					 "c_ytd_payment = c_ytd_payment + $1, "
+					 "c_payment_cnt = c_payment_cnt + 1 "
+					 "WHERE c_id = $2 AND c_d_id = $3 AND c_w_id = $4",
+					 4, NULL,
+					 (const char *[]){
+						 psprintf("%.2f", h_amount),
+						 psprintf("%d", c_id),
+						 psprintf("%d", c_d_id),
+						 psprintf("%d", c_w_id)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		PQclear(res);
+		PQexec(con, "ROLLBACK");
+		return false;
+	}
+	PQclear(res);
+
+	/* Insert into history table */
+	res = PQexecParams(con,
+					 "INSERT INTO history (h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, h_date, h_amount, h_data) "
+					 "VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, $6, $7)",
+					 7, NULL,
+					 (const char *[]){
+						 psprintf("%d", c_id),
+						 psprintf("%d", c_d_id),
+						 psprintf("%d", c_w_id),
+						 psprintf("%d", d_id),
+						 psprintf("%d", w_id),
+						 psprintf("%.2f", h_amount),
+						 "Payment processed"
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		PQclear(res);
+		PQexec(con, "ROLLBACK");
+		return false;
+	}
+	PQclear(res);
+
+	/* Commit transaction */
 	res = PQexec(con, "COMMIT");
-	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
 		PQclear(res);
 		return false;
 	}
@@ -7544,23 +7912,318 @@ static bool executeTPCCNewOrder(PGconn *con) {
 	return true;
 }
 
-static bool executeTPCCPayment(PGconn *con) {
-	// Not implemented yet
+/*
+ * TPC-C Order-Status Transaction
+ * Accounts for approximately 4% of the total workload as a read-only transaction
+ */
+static bool
+executeTPCCOrderStatus(PGconn *con)
+{
+	PGresult *res;
+	int w_id, d_id, c_id;
+
+	/* Generate parameters randomly */
+	w_id = getrand(&base_random_sequence, 1, nwarehouses);
+	d_id = getrand(&base_random_sequence, 1, 10);
+	c_id = getrand(&base_random_sequence, 1, 3000);
+
+	/* Find the latest order for the customer */
+	res = PQexecParams(con,
+					 "SELECT o_id, o_entry_d, o_carrier_id "
+					 "FROM orders "
+					 "WHERE o_w_id = $1 AND o_d_id = $2 AND o_c_id = $3 "
+					 "ORDER BY o_id DESC LIMIT 1",
+					 3, NULL,
+					 (const char *[]){
+						 psprintf("%d", w_id),
+						 psprintf("%d", d_id),
+						 psprintf("%d", c_id)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+	{
+		PQclear(res);
+		return false;
+	}
+
+	int o_id = atoi(PQgetvalue(res, 0, 0));
+	PQclear(res);
+
+	/* Retrieve order line details */
+	res = PQexecParams(con,
+					 "SELECT ol_i_id, ol_supply_w_id, ol_quantity, ol_amount, ol_delivery_d "
+					 "FROM order_line "
+					 "WHERE ol_w_id = $1 AND ol_d_id = $2 AND ol_o_id = $3",
+					 3, NULL,
+					 (const char *[]){
+						 psprintf("%d", w_id),
+						 psprintf("%d", d_id),
+						 psprintf("%d", o_id)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+	{
+		PQclear(res);
+		return false;
+	}
+
+	/* Release the result */
+	PQclear(res);
+
 	return true;
 }
 
-static bool executeTPCCOrderStatus(PGconn *con) {
-	// Not implemented yet
+/*
+ * TPC-C Delivery Transaction
+ * Accounts for approximately 4% of the total workload
+ */
+static bool
+executeTPCCDelivery(PGconn *con)
+{
+	PGresult *res;
+	int w_id, o_carrier_id;
+	int d_id;
+
+	/* Generate parameters randomly */
+	w_id = getrand(&base_random_sequence, 1, nwarehouses);
+	o_carrier_id = getrand(&base_random_sequence, 1, 10);
+
+	/* Start transaction */
+	res = PQexec(con, "BEGIN");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		PQclear(res);
+		return false;
+	}
+	PQclear(res);
+
+	/* Process each district (1-10) */
+	for (d_id = 1; d_id <= 10; d_id++)
+	{
+		int o_id = 0;
+		int c_id = 0;
+		double total_amount = 0.0;
+
+		/* Find the oldest order in the new_order table */
+		res = PQexecParams(con,
+						 "SELECT MIN(no_o_id) FROM new_order "
+						 "WHERE no_w_id = $1 AND no_d_id = $2",
+						 2, NULL,
+						 (const char *[]){
+							 psprintf("%d", w_id),
+							 psprintf("%d", d_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_TUPLES_OK)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+
+		/* Skip districts with no orders to process */
+		if (PQgetisnull(res, 0, 0))
+		{
+			PQclear(res);
+			continue;
+		}
+
+		o_id = atoi(PQgetvalue(res, 0, 0));
+		PQclear(res);
+
+		/* Delete the order from the new_order table */
+		res = PQexecParams(con,
+						 "DELETE FROM new_order "
+						 "WHERE no_w_id = $1 AND no_d_id = $2 AND no_o_id = $3",
+						 3, NULL,
+						 (const char *[]){
+							 psprintf("%d", w_id),
+							 psprintf("%d", d_id),
+							 psprintf("%d", o_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_COMMAND_OK)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+		PQclear(res);
+
+		/* Retrieve the customer ID for the order */
+		res = PQexecParams(con,
+						 "SELECT o_c_id FROM orders WHERE o_id = $1 AND o_d_id = $2 AND o_w_id = $3",
+						 3, NULL,
+						 (const char *[]){
+							 psprintf("%d", o_id),
+							 psprintf("%d", d_id),
+							 psprintf("%d", w_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+
+		c_id = atoi(PQgetvalue(res, 0, 0));
+		PQclear(res);
+
+		/* Update the orders table: set the carrier ID */
+		res = PQexecParams(con,
+						 "UPDATE orders SET o_carrier_id = $1 "
+						 "WHERE o_id = $2 AND o_d_id = $3 AND o_w_id = $4",
+						 4, NULL,
+						 (const char *[]){
+							 psprintf("%d", o_carrier_id),
+							 psprintf("%d", o_id),
+							 psprintf("%d", d_id),
+							 psprintf("%d", w_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_COMMAND_OK)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+		PQclear(res);
+
+		/* Update the order_line table: set the delivery date */
+		res = PQexecParams(con,
+						 "UPDATE order_line SET ol_delivery_d = CURRENT_TIMESTAMP "
+						 "WHERE ol_o_id = $1 AND ol_d_id = $2 AND ol_w_id = $3",
+						 3, NULL,
+						 (const char *[]){
+							 psprintf("%d", o_id),
+							 psprintf("%d", d_id),
+							 psprintf("%d", w_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_COMMAND_OK)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+		PQclear(res);
+
+		/* Calculate the total amount for the order */
+		res = PQexecParams(con,
+						 "SELECT SUM(ol_amount) FROM order_line "
+						 "WHERE ol_o_id = $1 AND ol_d_id = $2 AND ol_w_id = $3",
+						 3, NULL,
+						 (const char *[]){
+							 psprintf("%d", o_id),
+							 psprintf("%d", d_id),
+							 psprintf("%d", w_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+
+		total_amount = atof(PQgetvalue(res, 0, 0));
+		PQclear(res);
+
+		/* Update the customer's balance and delivery count */
+		res = PQexecParams(con,
+						 "UPDATE customer SET c_balance = c_balance + $1, "
+						 "c_delivery_cnt = c_delivery_cnt + 1 "
+						 "WHERE c_id = $2 AND c_d_id = $3 AND c_w_id = $4",
+						 4, NULL,
+						 (const char *[]){
+							 psprintf("%.2f", total_amount),
+							 psprintf("%d", c_id),
+							 psprintf("%d", d_id),
+							 psprintf("%d", w_id)
+						 }, NULL, NULL, 0);
+
+		if (PQresultStatus(res) != PGRES_COMMAND_OK)
+		{
+			PQclear(res);
+			PQexec(con, "ROLLBACK");
+			return false;
+		}
+		PQclear(res);
+	}
+
+	/* Commit the transaction */
+	res = PQexec(con, "COMMIT");
+	if (PQresultStatus(res) != PGRES_COMMAND_OK)
+	{
+		PQclear(res);
+		return false;
+	}
+	PQclear(res);
+
 	return true;
 }
 
-static bool executeTPCCDelivery(PGconn *con) {
-	// Not implemented yet
-	return true;
-}
+/*
+ * TPC-C Stock-Level Transaction
+ * Accounts for approximately 4% of the total workload
+ */
+static bool
+executeTPCCStockLevel(PGconn *con)
+{
+	PGresult *res;
+	int w_id, d_id;
+	int threshold;
 
-static bool executeTPCCStockLevel(PGconn *con) {
-	// Not implemented yet
+	/* Generate parameters randomly */
+	w_id = getrand(&base_random_sequence, 1, nwarehouses);
+	d_id = getrand(&base_random_sequence, 1, 10);
+	threshold = getrand(&base_random_sequence, 10, 20);
+
+	/* Retrieve the next order ID from the district table */
+	res = PQexecParams(con,
+					 "SELECT d_next_o_id FROM district WHERE d_w_id = $1 AND d_id = $2",
+					 2, NULL,
+					 (const char *[]){
+						 psprintf("%d", w_id),
+						 psprintf("%d", d_id)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) != 1)
+	{
+		PQclear(res);
+		return false;
+	}
+
+	int next_o_id = atoi(PQgetvalue(res, 0, 0));
+	PQclear(res);
+
+	/* Count the number of items with stock below the threshold in the last 20 orders */
+	res = PQexecParams(con,
+					 "SELECT COUNT(DISTINCT s_i_id) "
+					 "FROM order_line, stock "
+					 "WHERE ol_w_id = $1 AND ol_d_id = $2 "
+					 "AND ol_o_id >= $3 AND ol_o_id < $4 "
+					 "AND s_w_id = $1 "
+					 "AND s_i_id = ol_i_id "
+					 "AND s_quantity < $5",
+					 5, NULL,
+					 (const char *[]){
+						 psprintf("%d", w_id),
+						 psprintf("%d", d_id),
+						 psprintf("%d", next_o_id - 20),
+						 psprintf("%d", next_o_id),
+						 psprintf("%d", threshold)
+					 }, NULL, NULL, 0);
+
+	if (PQresultStatus(res) != PGRES_TUPLES_OK)
+	{
+		PQclear(res);
+		return false;
+	}
+
+	PQclear(res);
+
 	return true;
 }
 
@@ -8405,4 +9068,3 @@ socket_has_input(socket_set *sa, int fd, int idx)
 }
 
 #endif							/* POLL_USING_SELECT */
-
