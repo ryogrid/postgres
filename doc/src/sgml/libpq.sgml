@@ -9198,7 +9198,7 @@ myEventProc(PGEventId evtId, void *evtInfo, void *passThrough)
       Defaults to <filename>~/.pg_service.conf</filename>, or
       <filename>%APPDATA%\postgresql\.pg_service.conf</filename> on
       Microsoft Windows.
-      <envar>PGSERVICEFILE</envar> behaves the same as the <xref
+      <envar>This environment variable</envar> behaves the same as the <xref
       linkend="libpq-connect-servicefile"/> connection parameter.
      </para>
     </listitem>
