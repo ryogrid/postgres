@@ -6158,6 +6158,28 @@ parseServiceFile(const char *serviceFile,
 	}
 
 exit:
+
+	/* If service was found successfully, set servicefile option if not already set */
+	if (*group_found && result == 0)
+	{
+		for (i = 0; options[i].keyword; i++)
+		{
+			if (strcmp(options[i].keyword, "servicefile") == 0)
+			{
+				if (options[i].val == NULL)
+				{
+					options[i].val = strdup(serviceFile);
+					if (!options[i].val)
+					{
+						libpq_append_error(errorMessage, "out of memory");
+						return 3;
+					}
+				}
+				break;
+			}
+		}
+	}
+
 	fclose(f);
 
 	return result;
